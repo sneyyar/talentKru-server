@@ -124,7 +124,7 @@ Key architectural decisions:
 
 1. THE Server SHALL store Candidate entities with fields: CandidateID (UUID), OrganizationID (FK), Name (max 200 characters), Email (max 254 characters), Phone (max 50 characters), Location (max 200 characters), GlobalStatus (Active, Interviewing, Expired, Ineligible, Deleted), IneligibilityReason (nullable, max 1000 characters), and AuditFields.
 2. WHEN a recruiter creates a candidate, THE Server SHALL validate that the Email is unique within the organization, that Name and Email are provided, and set GlobalStatus to Active by default.
-3. WHEN a candidate with GlobalStatus of Active has no active InterviewJourneys and no changes to Name, Email, Phone, Location, or associated resume records for 90 days, THE Server SHALL set GlobalStatus to Expired via a scheduled background task.
+3. WHEN a candidate with GlobalStatus of Active has no active InterviewJourneys and no changes to Name, Email, Phone, Location, or associated resume records for 90 days, THE Server SHALL set GlobalStatus to Expired via a scheduled background task that runs once every 24 hours.
 4. IF a user sets a candidate to Ineligible status without providing an IneligibilityReason value of at least 1 non-whitespace character, THEN THE Server SHALL reject the request with a 400 Bad Request response indicating that IneligibilityReason is required.
 5. WHEN a candidate is set to Deleted status, THE Server SHALL perform a logical deletion by populating the DeletedAt and DeletedBy AuditFields and excluding the candidate from search and matching results while retaining the record for audit purposes.
 6. THE Server SHALL support searching candidates by name (partial, case-insensitive match), email (partial, case-insensitive match), and status (exact match), scoped to the authenticated user's organization, with paginated results returning a maximum of 50 records per page by default.
@@ -143,9 +143,10 @@ Key architectural decisions:
 4. THE Server SHALL support two storage backends configurable via the STORAGE_BACKEND environment variable: a local filesystem directory (for development) and an S3-compatible bucket (for cloud deployment).
 5. WHEN a resume is uploaded, THE Server SHALL enqueue a background task to invoke the ResumeIngestionAgent with the storage URI and metadata.
 6. WHEN the ResumeIngestionAgent returns parsed results, THE Server SHALL update or create Candidate, CandidateJobHistory, and CandidateSkill records, associate the resume, and set ParseStatus to Completed.
-7. IF the ResumeIngestionAgent fails to parse a resume, THEN THE Server SHALL set ParseStatus to Failed, log the error with a correlation ID, and expose the resume record with Failed status so the uploading recruiter can provide candidate data via manual entry endpoints.
-8. THE Server SHALL support listing resumes for a candidate with pagination and retrieving resume metadata and parsed fields.
-9. THE Server SHALL restrict resume upload and listing endpoints to users with Recruiter or Administrator roles within the same organization.
+7. THE Server SHALL store CandidateJobHistory entities with fields: CandidateJobHistoryID (UUID), CandidateID (FK), OrganizationID (FK), CompanyName (max 200 characters), JobTitle (max 200 characters), StartDate (date), EndDate (nullable date), Description (max 2000 characters), IsCurrent (boolean), and AuditFields.
+8. IF the ResumeIngestionAgent fails to parse a resume, THEN THE Server SHALL set ParseStatus to Failed, log the error with a correlation ID, and expose the resume record with Failed status so the uploading recruiter can provide candidate data via manual entry endpoints.
+9. THE Server SHALL support listing resumes for a candidate with pagination and retrieving resume metadata and parsed fields.
+10. THE Server SHALL restrict resume upload endpoints to users with Recruiter or Administrator roles, and restrict resume listing and retrieval endpoints to users with Recruiter, Administrator, or HiringManager roles, all scoped within the same organization.
 
 ### Requirement 8: Skills and Domain Taxonomy
 
@@ -181,7 +182,7 @@ Key architectural decisions:
 1. THE Server SHALL store JobRequisition entities with fields: JobRequisitionID (UUID), OrganizationID (FK), ExternalRequisitionID (nullable, for future ATS integration), Title (max 200 characters), Department (max 100 characters), Location (max 200 characters), HiringManagerUserID (FK), Status (Open, OnHold, Closed, Cancelled), Description (max 5000 characters), linked JobProfile, and AuditFields.
 2. WHEN a recruiter creates a requisition, THE Server SHALL set Status to Open by default and permit only the following status transitions: Open to OnHold, Open to Closed, Open to Cancelled, OnHold to Open, and OnHold to Cancelled.
 3. WHEN a recruiter associates a candidate with a requisition, THE Server SHALL validate that the requisition Status is Open, that the candidate GlobalStatus is Active or Interviewing, and that the candidate is not already associated with the same requisition, before creating the association.
-4. THE Server SHALL support configuring required skills on a requisition with proficiency levels (integer 1 to 5) and priority weights (decimal value between 0.0 and 1.0 inclusive).
+4. THE Server SHALL support configuring required skills on a requisition with proficiency levels (integer 1 to 5) and priority weights (integer 1 to 10, where higher values indicate greater relative priority).
 5. THE Server SHALL support listing and filtering requisitions by hiring manager, status, department, and domain with pagination.
 6. IF a recruiter attempts a status transition not in the permitted set, THEN THE Server SHALL reject the request with a 400 response indicating the invalid transition.
 
@@ -196,8 +197,11 @@ Key architectural decisions:
 3. THE Server SHALL support stage sub-statuses (Scheduled, InProgress, Complete) on non-terminal stages only; terminal stages (Rejected, OfferDeclined, OfferAccepted, Withdrawn) SHALL have no sub-status.
 4. WHEN a stage transition occurs, THE Server SHALL create an InterviewJourneyStageHistory record with FromStage, ToStage, ChangedByUserID, ChangedAt, and optional comments (maximum 2000 characters).
 5. THE Server SHALL link interview artifacts (transcripts, behavioral feedback, interview feedback) to the InterviewJourney rather than directly to the Candidate.
-6. WHEN a candidate reaches OfferAccepted status and the OverallStatus is set to Completed, THE Server SHALL encrypt both keys in the Candidate-InterviewJourney join table so that the hired candidate's interview data cannot be looked up after onboarding.
-7. IF a user attempts a stage transition that violates the allowed transition rules, THEN THE Server SHALL reject the request with a 400 response indicating the transition is not permitted from the current stage.
+6. THE Server SHALL store CandidateInterviewJourney join table entities with fields: CandidateInterviewJourneyID (UUID), CandidateID (FK, encrypted when journey reaches OfferAccepted and OverallStatus is Completed), InterviewJourneyID (FK, encrypted when journey reaches OfferAccepted and OverallStatus is Completed), AssociatedAt (timestamp), and AuditFields, to track the many-to-many relationship between candidates and their interview journeys.
+7. WHEN a candidate's InterviewJourney stage transitions to OfferAccepted AND the OverallStatus is set to Completed, THE Server SHALL encrypt both the CandidateID and InterviewJourneyID columns in the CandidateInterviewJourney record so that the hired candidate's interview data cannot be looked up after onboarding.
+8. IF a user attempts a stage transition that violates the allowed transition rules, THEN THE Server SHALL reject the request with a 400 response indicating the transition is not permitted from the current stage.
+9. THE Server SHALL store InterviewFeedback entities with fields: InterviewFeedbackID (UUID), InterviewSlotID (FK), OrganizationID (FK), FeedbackType (enum: Manual, AIGenerated), Status (Draft, Submitted), competency ratings (JSON object mapping competency names to integer ratings 1-5), narrative summary (max 5000 characters), hiring recommendation (StrongYes, Yes, Neutral, No, StrongNo), and AuditFields.
+10. THE Server SHALL store BehavioralFeedbackDraft as a specialized type of InterviewFeedback with FeedbackType set to AIGenerated and Status set to Draft, which can be edited by the interviewer before final submission.
 
 ### Requirement 12: Interview Slot Scheduling
 
@@ -213,6 +217,8 @@ Key architectural decisions:
 6. WHEN an interviewer responds to an invitation, THE Server SHALL update InvitationStatus to Accepted or Declined accordingly.
 7. THE Server SHALL support updating AttendanceStatus to Attended or NoShow only after the slot's ScheduledEnd time has passed, via manual update by a user with Recruiter or Administrator role.
 8. THE Server SHALL store InterviewerPreference entities with fields: InterviewerUserID (FK), OrganizationID (FK), allowed interview types (subset of Manager, Technical, Behavioral, Panel), MaxInterviewsPerDay (integer, range 1 to 20), MaxInterviewsPerWeek (integer, range 1 to 100), preferred working hours per weekday (start time and end time per day of week), and AuditFields.
+9. THE Server SHALL restrict creation and modification of an InterviewerPreference record to the interviewer who owns the record (identified by InterviewerUserID matching the authenticated user's UserID), and to users with Administrator or SuperAdministrator roles.
+10. IF an interviewer has no InterviewerPreference record when an assignment is attempted, THEN THE Server SHALL apply default limits of MaxInterviewsPerDay=5 and MaxInterviewsPerWeek=20 and allow all interview types.
 
 ### Requirement 13: Interview Feedback
 
@@ -235,13 +241,16 @@ Key architectural decisions:
 #### Acceptance Criteria
 
 1. THE Server SHALL store Questionnaire entities with fields: QuestionnaireID (UUID), OrganizationID (FK), Title, questions defined in YAML format, and AuditFields.
-2. THE Server SHALL support linking questionnaires to requisitions via a JobRequisitionQuestionnaire relationship.
-3. WHEN a candidate is associated with a requisition that has linked questionnaires, THE Server SHALL create CandidateQuestionnaireResponse records with Status set to Draft, provided a response record does not already exist for that candidate-questionnaire combination.
-4. THE Server SHALL store CandidateQuestionnaireResponse entities with fields: CandidateQuestionnaireResponseID (UUID), CandidateID (FK), QuestionnaireID (FK), OrganizationID (FK), Status (Draft, Incomplete, Submitted), and AuditFields.
-5. THE Server SHALL store CandidateQuestionnaireAnswer as JSON keyed by QuestionID, linked to a CandidateQuestionnaireResponse record.
-6. WHEN a candidate saves partial answers without completing all required questions, THE Server SHALL set the CandidateQuestionnaireResponse Status to Incomplete.
-7. WHEN a candidate submits a completed questionnaire, THE Server SHALL set the CandidateQuestionnaireResponse Status to Submitted, and THE Server SHALL not allow further modifications to that response.
-8. IF a candidate attempts to modify a CandidateQuestionnaireResponse with Status of Submitted, THEN THE Server SHALL reject the request with a 403 Forbidden response.
+2. THE Server SHALL define questionnaire YAML schema with the following structure: a list of question objects, where each question contains id (string), text (string, max 500 characters), type (enum: text, multipleChoice, singleChoice, rating, date), required (boolean), options (array of strings for choice types), minRating and maxRating (integers for rating type), and validation rules (object with pattern, minLength, maxLength for text type).
+3. IF a recruiter submits a questionnaire with YAML that does not conform to the defined schema (missing required fields, invalid types, or invalid enum values), THEN THE Server SHALL reject the request with a 422 response indicating which fields failed validation.
+4. THE Server SHALL support linking questionnaires to requisitions via a JobRequisitionQuestionnaire relationship.
+5. THE Server SHALL publish domain events to an internal event bus implemented using FastAPI BackgroundTasks for immediate processing and a persistent event log table (DomainEvent) for audit and retry purposes, where each event contains EventID (UUID), EventType (string), Payload (JSON), PublishedAt (timestamp), ProcessedAt (nullable timestamp), and Status (Pending, Processed, Failed).
+6. WHEN a candidate is associated with a requisition that has linked questionnaires, THE Server SHALL create CandidateQuestionnaireResponse records with Status set to Draft, provided a response record does not already exist for that candidate-questionnaire combination.
+7. THE Server SHALL store CandidateQuestionnaireResponse entities with fields: CandidateQuestionnaireResponseID (UUID), CandidateID (FK), QuestionnaireID (FK), OrganizationID (FK), Status (Draft, Incomplete, Submitted), and AuditFields.
+8. THE Server SHALL store CandidateQuestionnaireAnswer as JSON keyed by QuestionID, linked to a CandidateQuestionnaireResponse record.
+9. WHEN a candidate saves partial answers without completing all required questions, THE Server SHALL set the CandidateQuestionnaireResponse Status to Incomplete.
+10. WHEN a candidate submits a completed questionnaire, THE Server SHALL set the CandidateQuestionnaireResponse Status to Submitted, and THE Server SHALL not allow further modifications to that response.
+11. IF a candidate attempts to modify a CandidateQuestionnaireResponse with Status of Submitted, THEN THE Server SHALL reject the request with a 403 Forbidden response.
 
 ### Requirement 15: Candidate Portal
 
@@ -249,7 +258,7 @@ Key architectural decisions:
 
 #### Acceptance Criteria
 
-1. THE Server SHALL generate CandidatePortalTokens as URL-safe strings with a minimum of 32 bytes of cryptographic randomness and a configurable TTL loaded from the PORTAL_TOKEN_TTL_DAYS environment variable.
+1. THE Server SHALL generate CandidatePortalTokens as URL-safe strings with a minimum of 32 bytes of cryptographic randomness and a configurable TTL loaded from the PORTAL_TOKEN_TTL_DAYS environment variable. THE Server SHALL automatically generate a CandidatePortalToken when a CandidateQuestionnaireResponse record is first created for a candidate, if no active (non-expired) token already exists for that candidate within the organization.
 2. WHEN a candidate accesses the portal with a valid token, THE Server SHALL validate that the token exists, is active, and has not expired.
 3. IF a candidate accesses the portal with a token that does not exist, is inactive, or has expired, THEN THE Server SHALL reject the request with a 401 response without revealing whether the token was invalid or expired.
 4. WHEN a candidate verifies their email against the token, THE Server SHALL issue a JWT session with a TTL of 60 minutes, scoped to that candidate and organization, containing claims: sub (candidate email), candidate_id, org_id, and exp.
@@ -266,7 +275,7 @@ Key architectural decisions:
 #### Acceptance Criteria
 
 1. THE Server SHALL store CandidateAvailabilitySlot entities with fields: CandidateAvailabilitySlotID (UUID), CandidateID (FK), OrganizationID (FK), interview type (RecruiterScreen, ManagerScreen, LoopInterview), StartTime, EndTime, Timezone, Status (Active, Cancelled), and AuditFields.
-2. WHEN a candidate submits availability, THE Server SHALL validate that StartTime is before EndTime, that the slot duration is at least 30 minutes, and that StartTime is at least 1 hour in the future relative to the server's current UTC time.
+2. WHEN a candidate submits availability, THE Server SHALL validate that StartTime is before EndTime, that the slot duration is at least 30 minutes and at most 480 minutes (8 hours), and that StartTime is at least 1 hour in the future relative to the server's current UTC time.
 3. IF a candidate submits an availability slot that fails validation, THEN THE Server SHALL reject the request with a 422 response and an error message indicating which validation rule was violated.
 4. WHEN creating InterviewSlot records, THE Server SHALL use candidate availability slots with Status Active and interviewer preferences to filter eligible scheduling options, including only slots whose time range fully contains the proposed interview duration.
 5. WHEN a candidate cancels an availability slot that has an InterviewSlot in Scheduled status within its time range, THE Server SHALL set the slot Status to Cancelled and leave the existing InterviewSlot unchanged.
@@ -291,7 +300,7 @@ Key architectural decisions:
 
 #### Acceptance Criteria
 
-1. WHEN a user triggers matching for a requisition, THE Server SHALL invoke the MatchingAgent as a background task scoped to the requisition's organization.
+1. THE Server SHALL invoke the MatchingAgent as a background task scoped to the requisition's organization both automatically when a candidate is associated with a requisition and when a user manually triggers matching for a requisition via the matching endpoint.
 2. THE MatchingAgent SHALL compute embeddings for the requisition using description, skills, and domain.
 3. THE MatchingAgent SHALL run vector search over candidate embeddings within the same organization, excluding candidates with GlobalStatus of Ineligible, Expired, or Deleted, and return a maximum of 100 candidate matches.
 4. THE MatchingAgent SHALL combine semantic similarity with structured skill matching to compute a MatchScore on a numeric scale of 0.00 to 100.00.
@@ -319,7 +328,7 @@ Key architectural decisions:
 #### Acceptance Criteria
 
 1. WHEN an interviewer submits a transcript for an InterviewSlot, THE Server SHALL invoke the BehavioralFeedbackAgent as a background task with the transcript text and contextual metadata including the interview type, job requisition title, and required competencies from the linked JobProfile.
-2. THE BehavioralFeedbackAgent SHALL generate structured behavioral feedback including competency ratings on the integer scale of 1 to 5 and a narrative summary of no more than 2000 characters.
+2. THE BehavioralFeedbackAgent SHALL generate structured behavioral feedback including competency ratings on the integer scale of 1 to 5 and a narrative summary of no more than 2000 characters. The interviewer may expand the narrative up to the InterviewFeedback maximum of 5000 characters before final submission.
 3. WHEN the BehavioralFeedbackAgent returns results, THE Server SHALL persist the generated feedback as a BehavioralFeedbackDraft linked to the InterviewSlot, replacing any previously generated draft for that slot.
 4. WHEN a user who is not the assigned interviewer for the slot attempts to trigger draft generation, THE Server SHALL reject the request with a 403 Forbidden response.
 5. IF the BehavioralFeedbackAgent fails, THEN THE Server SHALL log the error with the correlation ID and InterviewSlotID, and retain the ability for the interviewer to submit feedback manually without AI assistance.
@@ -337,9 +346,10 @@ Key architectural decisions:
 4. WHEN an InterviewSlot is created with Status Scheduled, THE NotificationAgent SHALL send an interview invitation email to the assigned interviewer.
 5. WHILE an InterviewSlot has Status Scheduled and InvitationStatus Pending or Accepted, THE NotificationAgent SHALL send a reminder email to the assigned interviewer 24 hours before the ScheduledStart time.
 6. WHEN a candidate reaches OfferAccepted status, THE NotificationAgent SHALL notify all interviewers who were assigned to InterviewSlots on that InterviewJourney.
-7. THE Server SHALL support organization-level notification templates and per-event-type enable/disable configuration.
-8. IF the NotificationAgent fails to deliver a notification, THEN THE Server SHALL log the failure and retry with exponential backoff up to a maximum of 5 attempts.
-9. IF the NotificationAgent exhausts all retry attempts for a notification, THEN THE Server SHALL log the final failure and mark the notification as permanently failed.
+7. THE Server SHALL store NotificationTemplate entities with fields: NotificationTemplateID (UUID), OrganizationID (FK), EventType (string matching domain event types), Subject (string, max 200 characters), BodyTemplate (text with placeholder variables in {{variable}} format), IsEnabled (boolean), and AuditFields, allowing organization-level customization of notification content.
+8. THE Server SHALL support organization-level notification templates and per-event-type enable/disable configuration via the NotificationTemplate entity.
+9. IF the NotificationAgent fails to deliver a notification, THEN THE Server SHALL log the failure and retry with exponential backoff up to a maximum of 5 attempts.
+10. IF the NotificationAgent exhausts all retry attempts for a notification, THEN THE Server SHALL log the final failure and mark the notification as permanently failed.
 
 ### Requirement 22: Reporting and Analytics
 
@@ -364,9 +374,10 @@ Key architectural decisions:
 
 1. THE Server SHALL emit structured JSON logs with a correlation ID, timestamp, log level, module name, and event description for the following workflows: authentication attempts, candidate creation and status changes, resume uploads and ingestion results, matching invocations, interview scheduling and status updates, questionnaire submissions, AI agent invocations and completions, and portal access events.
 2. THE Server SHALL expose a metrics endpoint in Prometheus-compatible format tracking: resumes parsed (counter), match computation duration in milliseconds (histogram), match counts per requisition (counter), questionnaire completion events (counter), AI agent error rates per agent name (counter), interview volume by stage, type, and organization (gauge), and no-show rates per organization (gauge).
-3. THE Server SHALL propagate correlation IDs from the originating HTTP request through background tasks and AI agent invocations, and integrate distributed tracing spans across AI agent calls, storage backend operations, and database query execution.
-4. WHEN an AI agent call fails, THE Server SHALL log the failure at ERROR level with the correlation ID, agent name, input payload size, resume or requisition identifier if applicable, error type, and error description.
-5. WHEN a background task is enqueued, THE Server SHALL include the originating request's correlation ID in the task context so that all log entries and trace spans produced by the task are linked to the original request.
+3. THE Server SHALL restrict access to the metrics endpoint (GET /metrics) using HTTP Basic Authentication with credentials validated against METRICS_USERNAME and METRICS_PASSWORD environment variables.
+4. THE Server SHALL propagate correlation IDs from the originating HTTP request through background tasks and AI agent invocations, and integrate distributed tracing spans across AI agent calls, storage backend operations, and database query execution.
+5. WHEN an AI agent call fails, THE Server SHALL log the failure at ERROR level with the correlation ID, agent name, input payload size, resume or requisition identifier if applicable, error type, and error description.
+6. WHEN a background task is enqueued, THE Server SHALL include the originating request's correlation ID in the task context so that all log entries and trace spans produced by the task are linked to the original request.
 
 ### Requirement 24: API Documentation and AI Agent Compatibility
 
@@ -387,9 +398,9 @@ Key architectural decisions:
 #### Acceptance Criteria
 
 1. THE Server SHALL encrypt the following PII fields at rest using the ENCRYPTION_KEY from environment configuration: Candidate Email, Candidate Phone, Candidate Name, and User Email.
-2. THE Server SHALL encrypt the CandidateID and InterviewJourneyID columns in the Candidate-InterviewJourney join table using the ENCRYPTION_KEY from environment configuration.
+2. THE Server SHALL encrypt the CandidateID and InterviewJourneyID columns in the CandidateInterviewJourney join table using the ENCRYPTION_KEY from environment configuration.
 3. THE Server SHALL record an audit log entry for each stage transition, candidate change, user change, role assignment, InterviewSlot change, and AI agent call, where each entry includes the actor identity, timestamp, action type, affected entity identifier, and a summary of changed values.
 4. THE Server SHALL use soft deletion for all entities, retaining records with a DeletedAt timestamp for audit purposes.
-5. WHEN a candidate's InterviewJourney reaches OfferAccepted stage, THE Server SHALL encrypt the CandidateID and InterviewJourneyID in the Candidate-InterviewJourney join table so that the hired candidate's interview data cannot be retrieved by lookup.
+5. WHEN a candidate's InterviewJourney stage transitions to OfferAccepted AND the OverallStatus is set to Completed, THE Server SHALL encrypt the CandidateID and InterviewJourneyID in the CandidateInterviewJourney join table so that the hired candidate's interview data cannot be retrieved by lookup.
 6. THE Server SHALL validate all input data on external-facing endpoints by enforcing type constraints, maximum field lengths, and allowed value ranges defined in the corresponding Pydantic request models, rejecting invalid input with a 422 response.
-7. IF a request attempts to read interview artifacts for a candidate whose Candidate-InterviewJourney join table keys are encrypted, THEN THE Server SHALL return a 403 Forbidden response indicating the data is no longer accessible.
+7. IF a request attempts to read interview artifacts for a candidate whose CandidateInterviewJourney join table keys are encrypted, THEN THE Server SHALL return a 403 Forbidden response indicating the data is no longer accessible.
