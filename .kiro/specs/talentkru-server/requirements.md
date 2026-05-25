@@ -43,8 +43,8 @@ Key architectural decisions:
 
 #### Acceptance Criteria
 
-1. THE Server SHALL use a `.env` file for all environment-specific configuration including STORAGE_BACKEND (local or s3), STORAGE_LOCAL_PATH (filesystem directory for local storage), RESUME_BUCKET_NAME (S3 bucket for cloud storage), ENCRYPTION_KEY, PORTAL_TOKEN_TTL_DAYS, AI model identifiers, and INTERVIEW_LEADERBOARD_DEFAULT_PERIOD_DAYS.
-2. IF any required environment variable (ENCRYPTION_KEY, STORAGE_BACKEND, or database connection parameters) is missing or empty at startup, THEN THE Server SHALL fail to start and log an error message indicating which variable is missing.
+1. THE Server SHALL use a `.env` file for all environment-specific configuration including STORAGE_BACKEND (local or s3), STORAGE_LOCAL_PATH (filesystem directory for local storage), RESUME_BUCKET_NAME (S3 bucket for cloud storage), ENCRYPTION_KEY, PORTAL_TOKEN_TTL_DAYS, AI model identifiers, INTERVIEW_LEADERBOARD_DEFAULT_PERIOD_DAYS, DATABASE_HOST, DATABASE_PORT, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, AGENT_API_KEY, METRICS_USERNAME, and METRICS_PASSWORD.
+2. IF any required environment variable (ENCRYPTION_KEY, STORAGE_BACKEND, DATABASE_HOST, DATABASE_PORT, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, AGENT_API_KEY, METRICS_USERNAME, or METRICS_PASSWORD) is missing or empty at startup, THEN THE Server SHALL fail to start and log an error message indicating which variable is missing.
 3. THE Server SHALL expose a health check endpoint at GET /health that returns a JSON response containing a status field (value "healthy" when the application and database connection are operational, "unhealthy" otherwise) and a version field (the application semantic version string).
 4. THE Server SHALL use PostgreSQL with the pgvector extension as the primary data store.
 5. THE Server SHALL use SQLAlchemy as the ORM layer with async session support.
