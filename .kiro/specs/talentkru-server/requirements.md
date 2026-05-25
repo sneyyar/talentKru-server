@@ -82,6 +82,20 @@ Key architectural decisions:
 6. THE Server SHALL support listing, creating, and updating users via REST endpoints restricted to Administrator and SuperAdministrator roles, with listing supporting pagination with a default page size of 20 and a maximum page size of 100.
 7. IF a user creation or update request contains an invalid email format or is missing required fields (Email, GivenName, LastName, password on creation), THEN THE Server SHALL reject the request with a 422 response indicating which fields failed validation.
 
+### Requirement 3.5: SuperAdmin On-Behalf-Of Impersonation
+
+**User Story:** As a SuperAdministrator, I want to temporarily assume the identity of an Administrator within an organization, so that I can perform configuration changes on behalf of that organization without requiring the Administrator's credentials.
+
+#### Acceptance Criteria
+
+1. THE Server SHALL expose a POST /admin/impersonate endpoint restricted to the SuperAdministrator role that accepts a target OrganizationID and a target UserID and returns a scoped on-behalf-of JWT.
+2. THE Server SHALL only permit impersonation of users who hold the Administrator role within the specified organization; IF the target user does not hold the Administrator role, THEN THE Server SHALL reject the request with a 403 Forbidden response.
+3. WHEN a SuperAdministrator initiates an on-behalf-of session, THE Server SHALL issue a JWT with the same TTL as a normal JWT (60 minutes), containing the impersonated user's org_id and roles claims, plus an additional obo_by claim set to the SuperAdministrator's UserID to identify the originating actor.
+4. THE Server SHALL record an audit log entry at the start of every on-behalf-of session containing the SuperAdministrator's UserID as the actor, the target OrganizationID, the target UserID, and the session start timestamp.
+5. THE Server SHALL record an audit log entry for every action performed during an on-behalf-of session, with the SuperAdministrator's UserID as the actor and the obo_by claim present, so that all changes are traceable to the SuperAdministrator rather than the impersonated user.
+6. IF a request bearing an on-behalf-of JWT attempts to access data outside the impersonated user's organization, THEN THE Server SHALL reject the request with a 403 Forbidden response.
+7. THE Server SHALL NOT allow nested impersonation; IF a request bearing an on-behalf-of JWT attempts to call the POST /admin/impersonate endpoint, THEN THE Server SHALL reject the request with a 403 Forbidden response.
+
 ### Requirement 4: JWT Local Authentication
 
 **User Story:** As a user, I want to authenticate with username and password, so that I can access the system without external SSO dependencies.
@@ -172,6 +186,22 @@ Key architectural decisions:
 4. WHEN a recruiter creates a job posting with a valid linked JobProfile, THE Server SHALL store the job posting and associate it with the specified JobProfile.
 5. THE Server SHALL support listing and filtering job postings by location, salary range (returning postings whose salary range overlaps with the requested min/max filter values), and sourcing channel, scoped to the authenticated user's organization.
 6. IF a user without the Recruiter role attempts to create, update, or delete a JobProfile or JobPosting, THEN THE Server SHALL return a 403 Forbidden response.
+
+### Requirement 9.6: Role and Privilege Management
+
+**User Story:** As an administrator, I want to assign fine-grained privileges to roles, so that API authorization is governed by specific capabilities rather than broad role names alone.
+
+#### Acceptance Criteria
+
+1. THE Server SHALL define a fixed, system-managed set of Privilege entities with fields: PrivilegeID (UUID), Name (unique, snake_case identifier, max 100 characters), Description (max 500 characters), and ResourceCategory (the module or domain the privilege governs, e.g., candidates, requisitions, interviews).
+2. THE Server SHALL store RolePrivilege entities representing the many-to-many assignment of Privileges to Roles, with fields: RolePrivilegeID (UUID), RoleName (FK to the supported roles list), PrivilegeID (FK), and AuditFields.
+3. THE Server SHALL ship with a default RolePrivilege mapping that preserves all existing role-based access rules defined in Requirement 5, so that the system behaves identically before and after the privilege layer is introduced.
+4. WHEN a request reaches a protected endpoint, THE Server SHALL evaluate authorization by checking whether the authenticated user holds at least one role that has been assigned the privilege required by that endpoint, in addition to any coarse-grained role checks already defined.
+5. THE Server SHALL expose read-only endpoints for listing all system-defined privileges and retrieving the privilege assignments for a given role, restricted to Administrator and SuperAdministrator roles.
+6. THE Server SHALL expose endpoints for assigning and removing privileges from roles, restricted to the SuperAdministrator role only.
+7. IF a SuperAdministrator attempts to assign a PrivilegeID that does not exist in the system-defined privilege set, THEN THE Server SHALL reject the request with a 400 Bad Request response.
+8. IF a SuperAdministrator attempts to remove a privilege assignment that would leave a role with no privileges, THEN THE Server SHALL reject the request with a 400 Bad Request response indicating that a role must retain at least one privilege.
+9. WHEN a role's privilege assignments are modified, THE Server SHALL record an audit log entry containing the actor's UserID, the affected RoleName, the PrivilegeID added or removed, and the timestamp.
 
 ### Requirement 10: Job Requisition Management
 
@@ -264,9 +294,24 @@ Key architectural decisions:
 4. WHEN a candidate verifies their email against the token, THE Server SHALL issue a JWT session with a TTL of 60 minutes, scoped to that candidate and organization, containing claims: sub (candidate email), candidate_id, org_id, and exp.
 5. IF a candidate provides an email that does not match the token's associated candidate, THEN THE Server SHALL reject the verification with a 401 response.
 6. THE Server SHALL expose portal endpoints for: listing questionnaires and their status, retrieving questions and existing answers, saving draft answers, and submitting final answers.
-7. WHEN a candidate submits final answers for a questionnaire, THE Server SHALL validate that all required questions have answers provided before transitioning the status to Submitted.
+7. WHEN a candidate saves answers without completing all required questions, THE Server SHALL persist the answers and set the CandidateQuestionnaireResponse Status to Incomplete, allowing the candidate to return and continue later. WHEN a candidate explicitly submits the questionnaire, THE Server SHALL validate that all required questions have answers provided; IF all required questions are answered, THE Server SHALL transition the status to Submitted and prevent further modifications; IF any required question is unanswered, THE Server SHALL reject the submission with a 422 response indicating which required questions are missing answers.
 8. THE Server SHALL expose portal endpoints for: listing candidate availability slots, creating and updating availability, and viewing upcoming and past interviews.
 9. THE Server SHALL restrict all portal endpoints to the authenticated candidate's own data within their organization.
+
+### Requirement 15.4: Email Notification Configuration
+
+**User Story:** As a system administrator, I want to control email notification delivery at both the global and organization level, so that notifications can be disabled for testing or compliance reasons without code changes.
+
+#### Acceptance Criteria
+
+1. THE Server SHALL store a SystemSetting entity with fields: SettingKey (unique string), SettingValue (string), Description (nullable), and AuditFields; and SHALL include a system-level setting with SettingKey `email_notifications_enabled` (boolean string "true" or "false", default "true") that acts as a global master switch for all outbound email delivery.
+2. THE Server SHALL store OrganizationEmailConfig entities with fields: OrganizationEmailConfigID (UUID), OrganizationID (FK, unique), EmailNotificationsEnabled (boolean, default true), ProviderType (enum: smtp, sendgrid, ses), SmtpHost (nullable, max 253 characters), SmtpPort (nullable integer), SmtpUsername (nullable, max 254 characters), SmtpPassword (nullable, stored encrypted using ENCRYPTION_KEY), SmtpUseTLS (nullable boolean), ThirdPartyApiKey (nullable, stored encrypted using ENCRYPTION_KEY), ThirdPartyProviderRegion (nullable, max 100 characters), FromAddress (max 254 characters), FromName (max 100 characters), and AuditFields.
+3. WHEN the NotificationAgent is about to deliver an email, THE Server SHALL first check the global `email_notifications_enabled` system setting; IF the global setting is "false", THE Server SHALL skip delivery and log an informational message without treating the skip as a failure.
+4. WHEN the global setting is "true", THE Server SHALL check the OrganizationEmailConfig for the target organization; IF the OrganizationEmailConfig.EmailNotificationsEnabled is false, THE Server SHALL skip delivery for that organization and log an informational message without treating the skip as a failure.
+5. WHEN delivering an email, THE Server SHALL use the SMTP or third-party provider credentials from the OrganizationEmailConfig for the target organization; IF no OrganizationEmailConfig exists for the organization, THE Server SHALL fall back to system-level SMTP defaults loaded from environment variables (SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_USE_TLS, EMAIL_FROM_ADDRESS, EMAIL_FROM_NAME).
+6. THE Server SHALL expose endpoints for creating, retrieving, and updating OrganizationEmailConfig records, restricted to Administrator and SuperAdministrator roles, scoped to the authenticated user's organization.
+7. THE Server SHALL expose endpoints for reading and updating the global `email_notifications_enabled` system setting, restricted to the SuperAdministrator role only.
+8. IF an OrganizationEmailConfig update contains an invalid ProviderType value or is missing required fields for the selected provider (SmtpHost, SmtpPort, SmtpUsername, SmtpPassword for smtp; ThirdPartyApiKey for sendgrid or ses), THEN THE Server SHALL reject the request with a 422 response indicating which fields failed validation.
 
 ### Requirement 16: Candidate Availability
 
