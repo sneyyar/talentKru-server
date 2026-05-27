@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "talentkru-server"
+version = "0.1.0"
+description = "TalentKru.ai FastAPI backend"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.5",
+    "uvicorn[standard]==0.32.1",
+    "sqlalchemy[asyncio]==2.0.36",
+    "asyncpg==0.30.0",
+    "alembic==1.14.0",
+    "pydantic-settings==2.6.1",
+    "pydantic[email]>=2.0.0",
+    "structlog==24.4.0",
+    "prometheus-client==0.21.1",
+    "opentelemetry-sdk==1.28.4",
+    "opentelemetry-instrumentation-fastapi==0.49b4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "hypothesis==6.119.3",
+    "pytest==8.3.4",
+    "pytest-asyncio==0.24.0",
+    "httpx==0.28.0",
+    "pytest-cov==6.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
