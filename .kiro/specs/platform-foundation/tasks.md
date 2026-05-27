@@ -10,7 +10,7 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
 
 ## Tasks
 
-- [ ] 1. Scaffold project structure and tooling
+- [x] 1. Scaffold project structure and tooling
   - Create the directory layout: `app/`, `app/domain_events/`, `app/observability/`, `app/middleware/`, `app/modules/` (with all 18 sub-module stubs), `alembic/versions/`, `tests/`
   - Add `pyproject.toml` with dependencies: `fastapi`, `uvicorn[standard]`, `sqlalchemy[asyncio]`, `asyncpg`, `alembic`, `pydantic-settings`, `structlog`, `prometheus-client`, `opentelemetry-sdk`, `opentelemetry-instrumentation-fastapi`, `hypothesis`, `pytest`, `pytest-asyncio`, `httpx`
   - Add `docker-compose.yml` with `postgres` (pgvector image) and `app` services; include a `test` profile for the test database
@@ -18,8 +18,8 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
   - Add `entrypoint.sh` that runs `alembic upgrade head` then starts `uvicorn`
   - _Requirements: 1.1, 1.4, 1.7_
 
-- [ ] 2. Implement configuration management
-  - [ ] 2.1 Implement `app/config.py` with `pydantic-settings` `BaseSettings`
+- [x] 2. Implement configuration management
+  - [x] 2.1 Implement `app/config.py` with `pydantic-settings` `BaseSettings`
     - Define all fields from Requirements 1.1 with correct types and defaults
     - Add `field_validator` for JWT_SIGNING_KEY, ENCRYPTION_KEY, AGENT_API_KEY, METRICS_USERNAME, METRICS_PASSWORD to reject empty/whitespace values
     - Add `database_url` property returning the `postgresql+asyncpg://` connection string
@@ -31,14 +31,14 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - **Validates: Requirements 1.2**
     - Use `hypothesis` `st.sampled_from` over the list of required variable names; for each sampled variable, construct a `Settings` with that variable absent or empty and assert `ValidationError` is raised with the variable name in the message
 
-- [ ] 3. Implement database layer and base models
-  - [ ] 3.1 Implement `app/database.py`
+- [x] 3. Implement database layer and base models
+  - [x] 3.1 Implement `app/database.py`
     - Create async engine with `pool_pre_ping=True`, `pool_size=10`, `max_overflow=20`
     - Create `AsyncSessionFactory` with `expire_on_commit=False`
     - Implement `get_db_session()` async generator dependency with commit-on-success and rollback-on-exception
     - _Requirements: 1.4, 1.5_
 
-  - [ ] 3.2 Implement `app/base_model.py` with `AuditMixin` and `VersionMixin`
+  - [x] 3.2 Implement `app/base_model.py` with `AuditMixin` and `VersionMixin`
     - Define `Base(DeclarativeBase)`
     - Define `current_user_id_var: ContextVar[str | None]`
     - Implement `AuditMixin` with `created_at`, `updated_at`, `deleted_at`, `created_by`, `updated_by`, `deleted_by` columns
@@ -61,35 +61,35 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - **Validates: Requirements 1.10**
     - Capture pre-delete values of `created_at`, `created_by`, `updated_at`, `updated_by`; perform soft-delete; assert `deleted_at` is set, `deleted_by` equals current user, and all pre-delete fields are unchanged
 
-- [ ] 4. Configure Alembic and initial migrations
+- [x] 4. Configure Alembic and initial migrations
   - Implement `alembic/env.py` importing `Base.metadata` and all module model files (noqa stubs for now)
   - Configure async migration runner using `run_async_migrations()` with `asyncio.run()`
   - Generate initial migration creating `organizations` and `domain_events` tables with all columns, indexes, and constraints from the DDL in the design
   - Ensure `CREATE EXTENSION IF NOT EXISTS vector` and `CREATE EXTENSION IF NOT EXISTS "uuid-ossp"` are included in the initial migration
   - _Requirements: 1.4, 1.6, 2.1, 3.2_
 
-- [ ] 5. Implement observability layer
-  - [ ] 5.1 Implement `app/observability/middleware.py` — Correlation ID middleware
+- [x] 5. Implement observability layer
+  - [x] 5.1 Implement `app/observability/middleware.py` — Correlation ID middleware
     - Define `correlation_id_var: ContextVar[str]`
     - Implement `CorrelationIDMiddleware(BaseHTTPMiddleware)` that reads `X-Correlation-ID` from request headers or generates a UUID4; stores in `correlation_id_var`; echoes back in response headers
     - _Requirements: 4.4, 4.6_
 
-  - [ ] 5.2 Implement `app/observability/logging.py` — structured JSON logging
+  - [x] 5.2 Implement `app/observability/logging.py` — structured JSON logging
     - Configure `structlog` with processors: `add_log_level`, `add_logger_name`, `TimeStamper(fmt="iso")`, custom `add_correlation_id` processor reading `correlation_id_var`, `JSONRenderer`
     - Expose `get_logger(name: str)` helper
     - _Requirements: 4.1_
 
-  - [ ] 5.3 Implement `app/observability/metrics.py` — Prometheus metric definitions
+  - [x] 5.3 Implement `app/observability/metrics.py` — Prometheus metric definitions
     - Define all seven metrics from Requirements 4.2: `resumes_parsed_total`, `match_computation_duration_ms` (Histogram with design buckets), `matches_per_requisition_total`, `questionnaire_completions_total`, `ai_agent_errors_total`, `interview_volume`, `no_show_rate`
     - _Requirements: 4.2_
 
-  - [ ] 5.4 Implement `app/observability/tracing.py` — OpenTelemetry tracer setup
+  - [x] 5.4 Implement `app/observability/tracing.py` — OpenTelemetry tracer setup
     - Initialize `TracerProvider` and configure `FastAPIInstrumentor`
     - Expose `get_tracer(name: str)` helper
     - Ensure spans are propagated through background tasks via `correlation_id_var`
     - _Requirements: 4.4_
 
-  - [ ] 5.5 Implement metrics endpoint in `app/modules/observability/router.py`
+  - [x] 5.5 Implement metrics endpoint in `app/modules/observability/router.py`
     - Implement `verify_metrics_credentials` dependency using `HTTPBasic` and `secrets.compare_digest`
     - Implement `GET /metrics` route returning `generate_latest()` with `CONTENT_TYPE_LATEST`; include full OpenAPI metadata (operation_id, summary ≤80 chars, description ≥20 chars)
     - _Requirements: 4.2, 4.3, 5.1_
@@ -114,23 +114,23 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - **Validates: Requirements 4.5**
     - Use `hypothesis` to generate agent names, payload sizes, and error types; simulate an agent failure; assert the ERROR log entry contains `correlation_id`, `agent_name`, `input_payload_size`, `error_type`, and `error_description`
 
-- [ ] 6. Checkpoint — core infrastructure
+- [x] 6. Checkpoint — core infrastructure
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Implement domain event infrastructure
-  - [ ] 7.1 Implement `app/domain_events/models.py`
+- [x] 7. Implement domain event infrastructure
+  - [x] 7.1 Implement `app/domain_events/models.py`
     - Define `EventStatus(str, enum.Enum)` with PENDING, PROCESSED, FAILED values
     - Define `DomainEvent(Base)` ORM model with all columns from the design: `event_id`, `event_type`, `payload` (JSONB), `published_at`, `processed_at`, `status` (SQLEnum), `correlation_id`
     - Add indexes on `status` and `event_type`
     - _Requirements: 3.2_
 
-  - [ ] 7.2 Implement `app/domain_events/handlers.py`
+  - [x] 7.2 Implement `app/domain_events/handlers.py`
     - Define `HandlerRegistry` mapping event type strings to async handler callables
     - Implement `register_handler(event_type: str, handler: Callable)` and `dispatch_event(event: DomainEvent, correlation_id: str | None)` functions
     - Pre-register stubs for all required event types: `journey_stage_changed`, `questionnaire_submitted`, `interview_slot_created`, `offer_accepted`, `candidate_created`, `candidate_status_changed`, `role_assignment_changed`, `requisition_status_changed`
     - _Requirements: 3.7_
 
-  - [ ] 7.3 Implement `app/domain_events/publisher.py`
+  - [x] 7.3 Implement `app/domain_events/publisher.py`
     - Implement `publish_event(event_type, payload, db, background_tasks, correlation_id)` following the persist-first pattern: `db.add(event)` → `await db.flush()` → conditionally `background_tasks.add_task(...)`
     - Implement `_dispatch_with_status_update(event_id, correlation_id)` with try/except/finally that always commits status update
     - Log `WARNING` when `background_tasks` is `None`; log `ERROR` on handler failure with `event_id` and `correlation_id`
@@ -151,41 +151,41 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - **Validates: Requirements 3.5**
     - Use `hypothesis` to generate event types; mock handler to raise an exception; assert `status == FAILED` and error is logged with `event_id` and `correlation_id`
 
-  - [ ] 7.7 Implement `app/domain_events/retry.py`
+  - [x] 7.7 Implement `app/domain_events/retry.py`
     - Implement `retry_failed_events(db: AsyncSession)` that queries `DomainEvent` where `status == FAILED`, re-dispatches each via `_dispatch_with_status_update`, and logs results
     - _Requirements: 3.5, 3.6_
 
-- [ ] 8. Implement multi-tenant organization module
-  - [ ] 8.1 Implement `app/shard_router.py`
+- [x] 8. Implement multi-tenant organization module
+  - [x] 8.1 Implement `app/shard_router.py`
     - Implement `get_shard_id(organization_id: UUID) -> int` always returning 0
     - Implement `get_engine_for_org(organization_id: UUID)` returning the shard-0 engine from a `shard_engines` dict
     - _Requirements: 2.2, 2.3_
 
-  - [ ] 8.2 Implement `app/modules/organizations/models.py`
+  - [x] 8.2 Implement `app/modules/organizations/models.py`
     - Define `Organization(Base, AuditMixin, VersionMixin)` with all columns: `organization_id`, `name` (VARCHAR 128), `slug` (VARCHAR 64, UNIQUE), `logo_url`, `primary_color`, `secondary_color`, `terms_url`, `contact_name` (VARCHAR 128, nullable), `contact_email` (VARCHAR 254, nullable), `contact_phone` (VARCHAR 32, nullable), `feature_flags` (JSONB), `shard_id` (default 0), `allowed_origins` (ARRAY of VARCHAR 253)
     - _Requirements: 2.1, 2.2, 6.1_
 
-  - [ ] 8.3 Implement `app/modules/organizations/schemas.py`
+  - [x] 8.3 Implement `app/modules/organizations/schemas.py`
     - Define Pydantic request/response schemas: `OrganizationCreate`, `OrganizationUpdate`, `OrganizationResponse`
     - Include `contact_name` (optional str, max 128), `contact_email` (optional EmailStr), and `contact_phone` (optional str, max 32) fields in all three schemas
     - Every field must include `Field(description="...")` with description ≥10 characters
     - Include `version` field in `OrganizationUpdate` and `OrganizationResponse` for optimistic locking
     - _Requirements: 2.1, 5.2, 7.2_
 
-  - [ ] 8.4 Implement `app/modules/organizations/service.py`
+  - [x] 8.4 Implement `app/modules/organizations/service.py`
     - Implement `create_organization`, `update_organization`, `get_organization`, `list_organizations` service functions
     - Enforce slug uniqueness with a pre-write SELECT check; raise `HTTPException(409)` with `{"detail": "slug already in use", "field": "slug"}` on conflict
     - Apply `shard_id = 0` on create
     - _Requirements: 2.1, 2.2, 2.6, 2.7_
 
-  - [ ] 8.5 Implement `app/modules/organizations/router.py`
+  - [x] 8.5 Implement `app/modules/organizations/router.py`
     - Define REST endpoints: `POST /organizations`, `GET /organizations`, `GET /organizations/{org_id}`, `PATCH /organizations/{org_id}`
     - Prefix with `/api/v1` (applied in `main.py`)
     - Restrict all endpoints to `SuperAdministrator` role via `require_super_admin()` dependency
     - Include full OpenAPI metadata on every route (operation_id, summary ≤80 chars, description ≥20 chars)
     - _Requirements: 2.6, 5.1, 6.4_
 
-  - [ ] 8.6 Implement `app/dependencies.py` — shared dependencies
+  - [x] 8.6 Implement `app/dependencies.py` — shared dependencies
     - Implement `get_org_scoped_query(model_class, organization_id, db)` returning a SELECT filtered by `organization_id` and `deleted_at IS NULL`
     - Implement `get_current_principal()` dependency (JWT stub — full JWT validation is in the `auth` module; this returns the principal with `organization_id` and `role`)
     - Implement `require_super_admin()` dependency that raises `HTTPException(403)` if role is not SuperAdministrator
@@ -201,8 +201,8 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - **Validates: Requirements 2.7**
     - Use `hypothesis` `st.text(alphabet=st.characters(whitelist_categories=('Ll', 'Nd')), min_size=1, max_size=64)` for slugs; create an org with a slug; attempt to create/update another org with the same slug; assert `409` response with slug error message
 
-- [ ] 9. Implement middleware stack
-  - [ ] 9.1 Implement `app/middleware/cors.py` — dynamic per-org CORS middleware
+- [x] 9. Implement middleware stack
+  - [x] 9.1 Implement `app/middleware/cors.py` — dynamic per-org CORS middleware
     - Implement `DynamicCORSMiddleware(BaseHTTPMiddleware)` with `_extract_org_id(request)` and `_get_allowed_origins(org_id)` (with 60-second LRU cache)
     - Set CORS headers only when origin is in the allowed list; log `WARN` with origin and org ID when blocked
     - Handle preflight `OPTIONS` requests
@@ -213,11 +213,11 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - **Validates: Requirements 6.2, 6.3**
     - Use `hypothesis` to generate lists of allowed origins and a requesting origin; assert `Access-Control-Allow-Origin` is present iff the origin is in the allowed list
 
-  - [ ] 9.3 Implement `app/middleware/versioning.py` — deprecation header decorator
+  - [x] 9.3 Implement `app/middleware/versioning.py` — deprecation header decorator
     - Implement `deprecated(sunset_date: str, replacement_link: str)` decorator that injects `Sunset`, `Deprecation: true`, and `Link` headers into the response
     - _Requirements: 6.5, 6.6_
 
-  - [ ] 9.4 Implement `app/middleware/auth.py` — agent API key guard
+  - [x] 9.4 Implement `app/middleware/auth.py` — agent API key guard
     - Implement `require_agent_api_key(request: Request)` FastAPI dependency
     - Reject with `401` if `X-Agent-API-Key` header is missing, empty, or does not match `settings.AGENT_API_KEY`
     - Reject with `401` if `settings.AGENT_API_KEY` is not defined or empty
@@ -228,13 +228,13 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - **Validates: Requirements 5.4**
     - Use `hypothesis` `st.text()` for API key values; for any key that does not exactly match the configured `AGENT_API_KEY`, assert the response to `/internal/agents/` is `401 Unauthorized`
 
-- [ ] 10. Implement concurrency control (optimistic locking)
-  - [ ] 10.1 Verify `VersionMixin` is applied to all mutable entity stubs
+- [x] 10. Implement concurrency control (optimistic locking)
+  - [x] 10.1 Verify `VersionMixin` is applied to all mutable entity stubs
     - Create stub ORM model files for all 14 mutable entities listed in Requirements 7.1 that are not yet defined: `Candidate`, `User`, `InterviewJourney`, `InterviewSlot`, `JobRequisition`, `JobPosting`, `JobProfile`, `Questionnaire`, `CandidateQuestionnaireResponse`, `InterviewFeedback`, `InterviewerPreference`, `OrganizationEmailConfig`, `NotificationTemplate`
     - Each stub must inherit `Base`, `AuditMixin`, `VersionMixin` and define at minimum `__tablename__` and primary key
     - _Requirements: 7.1, 7.5_
 
-  - [ ] 10.2 Implement optimistic lock conflict handler in `app/main.py`
+  - [x] 10.2 Implement optimistic lock conflict handler in `app/main.py`
     - Register `@app.exception_handler(StaleDataError)` returning `JSONResponse(409)` with `detail`, `hint` fields
     - _Requirements: 7.4_
 
@@ -253,8 +253,8 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - **Validates: Requirements 7.4**
     - Use `hypothesis` to generate version N and a mismatched version M (M ≠ N); submit update with version M; assert `409 Conflict` response and entity remains at version N in the database
 
-- [ ] 11. Implement API documentation conventions and OpenAPI validation
-  - [ ] 11.1 Implement OpenAPI metadata enforcement helpers
+- [x] 11. Implement API documentation conventions and OpenAPI validation
+  - [x] 11.1 Implement OpenAPI metadata enforcement helpers
     - Add a startup check (or test utility) that iterates `app.routes` and asserts every `APIRoute` has `operation_id` (snake_case), `summary` (≤80 chars), and `description` (≥20 chars)
     - Add a Pydantic model introspection utility that checks every `FieldInfo` in request/response schemas has `description` ≥10 characters
     - _Requirements: 5.1, 5.2, 5.3_
@@ -274,8 +274,8 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - **Validates: Requirements 6.4**
     - Iterate all `APIRoute` objects excluding `/health`, `/metrics`, `/docs`, `/openapi.json`, `/internal/*`; assert each path starts with `/api/v1/`
 
-- [ ] 12. Wire everything together in `app/main.py`
-  - [ ] 12.1 Implement `app/main.py` — FastAPI app factory
+- [x] 12. Wire everything together in `app/main.py`
+  - [x] 12.1 Implement `app/main.py` — FastAPI app factory
     - Create `FastAPI` instance with `title`, `version`, `openapi_url="/openapi.json"`, `docs_url="/docs"`
     - Register middleware in the correct order: `CorrelationIDMiddleware`, `StructuredLoggingMiddleware`, `TracingMiddleware`, `DynamicCORSMiddleware`, `MetricsMiddleware`
     - Register exception handlers: `StaleDataError` → 409, global `Exception` → 500 with correlation ID
@@ -284,32 +284,32 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - Implement `GET /health` endpoint with DB connectivity check and version field
     - _Requirements: 1.3, 1.7, 6.4_
 
-  - [ ] 12.2 Register all module routers and internal agent router
+  - [x] 12.2 Register all module routers and internal agent router
     - Include all 18 module routers under `/api/v1`
     - Create `app/modules/agents/router.py` stub with `dependencies=[Depends(require_agent_api_key)]` on the `/internal/agents/` prefix
     - _Requirements: 1.7, 5.4_
 
-- [ ] 13. Checkpoint — full integration
+- [x] 13. Checkpoint — full integration
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 14. Write integration and smoke tests
-  - [ ]* 14.1 Write integration tests for health check endpoint
+- [x] 14. Write integration and smoke tests
+  - [x]* 14.1 Write integration tests for health check endpoint
     - Test `GET /health` returns `{"status": "healthy", "version": "..."}` when DB is reachable
     - Test `GET /health` returns `{"status": "unhealthy"}` when DB is unreachable
     - _Requirements: 1.3_
 
-  - [ ]* 14.2 Write integration tests for organization CRUD endpoints
+  - [x]* 14.2 Write integration tests for organization CRUD endpoints
     - Test create, read, update, list operations via HTTP client
     - Test slug uniqueness enforcement returns `409` with correct body
     - Test SuperAdministrator restriction returns `403` for non-super-admin callers
     - _Requirements: 2.6, 2.7_
 
-  - [ ]* 14.3 Write integration tests for domain event retry endpoint
+  - [x]* 14.3 Write integration tests for domain event retry endpoint
     - Test `POST /internal/domain-events/retry` restricted to SuperAdministrator
     - Test that failed events are re-dispatched and status updated
     - _Requirements: 3.6_
 
-  - [ ]* 14.4 Write smoke tests
+  - [x]* 14.4 Write smoke tests
     - Verify pgvector extension is available
     - Verify Alembic migrations complete without error
     - Verify all required event type constants are defined in `handlers.py`
@@ -317,7 +317,7 @@ All code is Python (FastAPI, SQLAlchemy async, Alembic, structlog, prometheus-cl
     - Verify `GET /health` returns `{"status": "healthy"}` against the live database
     - _Requirements: 1.3, 1.4, 3.7, 7.1, 7.5_
 
-- [ ] 15. Final checkpoint — all tests pass
+- [x] 15. Final checkpoint — all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ---
