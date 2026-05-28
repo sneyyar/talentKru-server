@@ -6,7 +6,7 @@
 
 ``\> docker run -d \
   --name local-vector-db \
-  -e POSTGRES_PASSWORD=<admin_password> \
+  -e POSTGRES_PASSWORD=<pg_admin_password> \
   -e POSTGRES_DB=krudb \
   -p 5432:5432 \
   -v krudb_data:/var/lib/postgresql/data \
@@ -21,7 +21,7 @@
 # Running pgadmin utility
  ``\> docker run -p 8080:80 \
 -e 'PGADMIN_DEFAULT_EMAIL=snair33@gmail.com' \
--e 'PGADMIN_DEFAULT_PASSWORD=<admin_password>' \
+-e 'PGADMIN_DEFAULT_PASSWORD=<pg_admin_password>' \
 -d dpage/pgadmin4``
 
 ### Adding local postgres database to pgadmin

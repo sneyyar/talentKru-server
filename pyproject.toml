@@ -7,19 +7,21 @@ name = "talentkru-server"
 version = "0.1.0"
 description = "TalentKru.ai FastAPI backend"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12.13"
 dependencies = [
     "fastapi==0.115.5",
-    "uvicorn[standard]==0.32.1",
-    "sqlalchemy[asyncio]==2.0.36",
-    "asyncpg==0.30.0",
-    "alembic==1.14.0",
+    "uvicorn[standard]==0.34.2",
+    "sqlalchemy[asyncio]==2.0.40",
+    "asyncpg==0.31.0",
+    "alembic==1.18.4",
     "pydantic-settings==2.6.1",
-    "pydantic[email]>=2.0.0",
+    "pydantic[email]==2.7.0",
     "structlog==24.4.0",
     "prometheus-client==0.21.1",
-    "opentelemetry-sdk==1.28.4",
-    "opentelemetry-instrumentation-fastapi==0.49b4",
+    "opentelemetry-sdk==1.41.0",
+    "opentelemetry-instrumentation-fastapi==0.62b0",
+    "boto3==1.42.25",
+    "cryptography==43.0.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +31,12 @@ dev = [
     "pytest-asyncio==0.24.0",
     "httpx==0.28.0",
     "pytest-cov==6.0.0",
+]
+test = [
+    "hypothesis==6.119.3",
+    "pytest==8.3.4",
+    "pytest-asyncio==0.24.0",
+    "httpx==0.28.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -46,3 +54,34 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 ignore = ["E501"]
+
+[tool.poe.tasks]
+# Development tasks
+dev = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+dev-quiet = { cmd = "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000", capture = true }
+
+# Testing tasks
+test = "pytest"
+test-cov = "pytest --cov=app --cov-report=html --cov-report=term-missing"
+test-watch = "pytest-watch"
+
+# Code quality tasks
+lint = "ruff check app tests"
+format = "ruff format app tests"
+format-check = "ruff format --check app tests"
+
+# Database tasks
+migrate = "alembic upgrade head"
+migrate-down = "alembic downgrade -1"
+db-status = "alembic current"
+db-check = "python -m pytest tests/ -k test_db_connection -v"
+db-revision = "alembic revision --autogenerate -m"
+
+# Type checking
+type-check = "python -m mypy app"
+
+# All checks
+check = ["lint", "format-check", "test"]
+
+# Clean up
+clean = "find . -type d -name __pycache__ -exec rm -rf {} + && find . -type f -name '*.pyc' -delete"
