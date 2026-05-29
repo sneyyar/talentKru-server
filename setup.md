@@ -1,6 +1,6 @@
 # TalentKru.ai Server — Local Development Setup
 
-This guide provides step-by-step instructions for setting up and running the TalentKru.ai server locally using **uv**, **poetry**, and **poe** for dependency management and task automation.
+This guide provides step-by-step instructions for setting up and running the TalentKru.ai server locally using **uv**, **poetry**, and **invoke** for dependency management and task automation.
 
 ## Table of Contents
 
@@ -162,16 +162,16 @@ uv pip install poetry
 poetry --version
 ```
 
-### Step 3: Install `poe` (Task Runner)
+### Step 3: Install `invoke` (Task Runner)
 
-Poe is a task runner that automates common development tasks.
+Invoke is a task runner that automates common development tasks.
 
 ```bash
-# Install poe using uv
-uv pip install poethepoet
+# Install invoke using poetry
+poetry add invoke --group dev
 
 # Verify installation
-poe --version
+poetry run invoke --version
 ```
 
 ### Step 4: Clone and Navigate to the Project
@@ -289,17 +289,17 @@ Alembic manages database schema migrations.
 
 ```bash
 # Run all pending migrations
-poe migrate
+poetry run invoke migrate
 
 # Verify migrations were applied
-poe db-status
+poetry run invoke db-status
 ```
 
 ### Step 3: Verify Database Connection
 
 ```bash
 # Test the database connection
-poe db-check
+poetry run invoke db-check
 ```
 
 You should see output confirming the database connection is successful.
@@ -308,11 +308,11 @@ You should see output confirming the database connection is successful.
 
 ## Running the Application
 
-### Option 1: Run with Poe (Recommended)
+### Option 1: Run with Invoke (Recommended)
 
 ```bash
 # Start the development server
-poe dev
+poetry run invoke dev
 
 # The server will be available at http://localhost:8000
 ```
@@ -344,47 +344,47 @@ docker-compose up
 
 ## Available Tasks
 
-Poe provides convenient shortcuts for common development tasks. View all available tasks:
+Invoke provides convenient shortcuts for common development tasks. View all available tasks:
 
 ```bash
-poe --help
+poetry run invoke --list
 ```
 
 ### Common Tasks
 
 | Task | Command | Description |
 |------|---------|-------------|
-| **Start Dev Server** | `poe dev` | Run the FastAPI server with auto-reload |
-| **Run Tests** | `poe test` | Run the test suite with pytest |
-| **Run Tests with Coverage** | `poe test-cov` | Run tests and generate coverage report |
-| **Lint Code** | `poe lint` | Check code style with ruff |
-| **Format Code** | `poe format` | Auto-format code with ruff |
-| **Database Migrations** | `poe migrate` | Apply pending database migrations |
-| **Database Status** | `poe db-status` | Show current migration status |
-| **Database Check** | `poe db-check` | Test database connection |
-| **Type Check** | `poe type-check` | Run type checking with mypy (if configured) |
+| **Start Dev Server** | `poetry run invoke dev` | Run the FastAPI server with auto-reload |
+| **Run Tests** | `poetry run invoke test` | Run the test suite with pytest |
+| **Run Tests with Coverage** | `poetry run invoke test-cov` | Run tests and generate coverage report |
+| **Lint Code** | `poetry run invoke lint` | Check code style with ruff |
+| **Format Code** | `poetry run invoke format` | Auto-format code with ruff |
+| **Database Migrations** | `poetry run invoke migrate` | Apply pending database migrations |
+| **Database Status** | `poetry run invoke db-status` | Show current migration status |
+| **Database Check** | `poetry run invoke db-check` | Test database connection |
+| **Type Check** | `poetry run invoke type-check` | Run type checking with mypy (if configured) |
 
 ### Example: Running Tests
 
 ```bash
 # Run all tests
-poe test
+poetry run invoke test
 
 # Run tests with coverage report
-poe test-cov
+poetry run invoke test-cov
 
 # Run tests for a specific module
-poe test tests/modules/auth/
+poetry run invoke test --path tests/modules/auth/
 ```
 
 ### Example: Code Quality
 
 ```bash
 # Check code style
-poe lint
+poetry run invoke lint
 
 # Auto-format code
-poe format
+poetry run invoke format
 ```
 
 ---
@@ -645,13 +645,13 @@ python --version  # Should show Python 3.12.x
 docker-compose up -d postgres
 
 # 4. Start the development server
-poe dev
+poetry run invoke dev
 
 # 5. In another terminal, run tests as you develop
-poe test
+poetry run invoke test
 
 # 6. Check code quality
-poe lint
+poetry run invoke lint
 
 # 7. When done, stop the server (Ctrl+C) and database
 docker-compose down
@@ -661,25 +661,25 @@ docker-compose down
 
 ```bash
 # After modifying models, create a new migration
-alembic revision --autogenerate -m "Add new_column to users table"
+poetry run invoke db-revision --message "Add new_column to users table"
 
 # Review the generated migration file in alembic/versions/
 
 # Apply the migration
-poe migrate
+poetry run invoke migrate
 ```
 
 ### Running Specific Tests
 
 ```bash
 # Run tests for a specific module
-poe test tests/modules/auth/
+poetry run invoke test --path tests/modules/auth/
 
 # Run a specific test file
-poe test tests/modules/auth/test_router.py
+poetry run invoke test --path tests/modules/auth/test_router.py
 
 # Run a specific test function
-poe test tests/modules/auth/test_router.py::test_login
+poetry run invoke test --path tests/modules/auth/test_router.py::test_login
 ```
 
 ---
@@ -691,7 +691,7 @@ poe test tests/modules/auth/test_router.py::test_login
 - **Alembic Documentation:** https://alembic.sqlalchemy.org/
 - **Poetry Documentation:** https://python-poetry.org/docs/
 - **uv Documentation:** https://docs.astral.sh/uv/
-- **Poe Documentation:** https://poethepoet.naivelyoptimistic.com/
+- **Invoke Documentation:** http://docs.pyinvoke.org/
 
 ---
 
