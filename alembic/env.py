@@ -40,6 +40,7 @@ import app.modules.journeys  # noqa: F401, E402
 import app.modules.interviews  # noqa: F401, E402
 import app.modules.questionnaires  # noqa: F401, E402
 import app.modules.portal  # noqa: F401, E402
+import app.modules.privacy  # noqa: F401, E402
 import app.modules.agents  # noqa: F401, E402
 import app.modules.reporting  # noqa: F401, E402
 import app.modules.auth  # noqa: F401, E402

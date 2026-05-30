@@ -29,6 +29,7 @@ class Settings(BaseSettings):
 
     # Agent security
     AGENT_API_KEY: str
+    INTERNAL_API_BASE_URL: str = "http://localhost:8000"
 
     # Metrics auth
     METRICS_USERNAME: str

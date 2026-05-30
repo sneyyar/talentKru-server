@@ -1,1 +1,1 @@
-"""Privacy and GDPR compliance service."""
+"""Privacy service."""

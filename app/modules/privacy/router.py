@@ -1,4 +1,5 @@
-"""Privacy and GDPR compliance router."""
+"""Privacy router."""
+
 from fastapi import APIRouter
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1", tags=["privacy"])

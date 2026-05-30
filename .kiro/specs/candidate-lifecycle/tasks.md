@@ -33,29 +33,29 @@ This implementation verifies 19 correctness properties:
 
 ## Tasks
 
-- [ ] 1. Set up module structure and Pydantic schemas
+- [x] 1. Set up module structure and Pydantic schemas
   - Create directory tree: `app/modules/{candidates,resumes,skills,job_profile,job_posting,requisitions,portal,privacy}/` with `__init__.py`, `models.py`, `schemas.py`, `service.py`, `router.py` stubs
   - Add `hypothesis`, `pytest-asyncio`, `httpx`, `boto3` to `pyproject.toml` test/runtime dependencies if not already present
   - Create `app/modules/resumes/storage.py` stub with `StorageService` ABC, `LocalStorageBackend`, `S3StorageBackend`, and `get_storage_service()` factory
   - _Requirements: 1.1, 2.1, 2.4, 3.1, 4.1, 5.1, 6.1_
 
 
-- [ ] 2. Implement data models and Alembic migration
-  - [ ] 2.1 Create `Candidate` model in `app/modules/candidates/models.py`
+- [x] 2. Implement data models and Alembic migration
+  - [x] 2.1 Create `Candidate` model in `app/modules/candidates/models.py`
     - Define `GlobalStatus(str, enum.Enum)` with ACTIVE, INTERVIEWING, EXPIRED, INELIGIBLE, DELETED values
     - Define `Candidate(Base, AuditMixin, VersionMixin)` with all columns: `candidate_id`, `organization_id`, `name` (VARCHAR 512, encrypted), `name_hash` (VARCHAR 64), `email` (VARCHAR 512, encrypted), `email_hash` (VARCHAR 64), `phone` (VARCHAR 200, encrypted, nullable), `location` (VARCHAR 200, nullable), `global_status` (SQLEnum), `ineligibility_reason` (VARCHAR 1000, nullable)
     - Add `UniqueConstraint("organization_id", "email_hash", name="uq_candidates_org_email")`
     - Add partial indexes: `idx_candidates_org_status` on `(organization_id, global_status) WHERE deleted_at IS NULL` and `idx_candidates_name_hash` on `(organization_id, name_hash) WHERE deleted_at IS NULL`
     - _Requirements: 1.1_
 
-  - [ ] 2.2 Create `Resume` and `CandidateJobHistory` models in `app/modules/resumes/models.py`
+  - [x] 2.2 Create `Resume` and `CandidateJobHistory` models in `app/modules/resumes/models.py`
     - Define `ParseStatus(str, enum.Enum)` with PENDING, COMPLETED, FAILED values
     - Define `Resume(Base, AuditMixin)` with all columns from the design DDL; add `parsed_data` (JSONB, nullable)
     - Define `CandidateJobHistory(Base, AuditMixin)` with all columns from the design DDL
     - Add partial index `idx_resumes_candidate` on `(candidate_id) WHERE deleted_at IS NULL`
     - _Requirements: 2.1, 2.7_
 
-  - [ ] 2.3 Create skills taxonomy models in `app/modules/skills/models.py`
+  - [x] 2.3 Create skills taxonomy models in `app/modules/skills/models.py`
     - Define `SkillSource(str, enum.Enum)` with MANUAL, PARSED, INFERRED values
     - Define `Domain(Base, AuditMixin)`, `Skill(Base, AuditMixin)` with `UniqueConstraint("domain_id", "name")`
     - Define `CandidateSkill(Base, AuditMixin)` with `proficiency_rank` CHECK (1–5), `years_of_experience` CHECK (0–50), `UniqueConstraint("candidate_id", "skill_id")`
@@ -64,7 +64,7 @@ This implementation verifies 19 correctness properties:
     - _Requirements: 3.1, 3.2, 3.3_
 
 
-  - [ ] 2.4 Create job profile and job posting models
+  - [x] 2.4 Create job profile and job posting models
     - Define `SkillDesignation(str, enum.Enum)` with REQUIRED, DESIRED values
     - Define `JobProfile(Base, AuditMixin, VersionMixin)` in `app/modules/job_profile/models.py` with `job_profile_id`, `organization_id`, `name` (VARCHAR 200)
     - Define `JobProfileSkill(Base, AuditMixin)` with `designation` (SQLEnum), `required_proficiency_rank` CHECK (1–5), `UniqueConstraint("job_profile_id", "skill_id")`
@@ -72,7 +72,7 @@ This implementation verifies 19 correctness properties:
     - Add partial index `idx_job_postings_salary` on `(organization_id, salary_min, salary_max) WHERE deleted_at IS NULL`
     - _Requirements: 4.1, 4.2_
 
-  - [ ] 2.5 Create requisition and privacy models
+  - [x] 2.5 Create requisition and privacy models
     - Define `RequisitionStatus(str, enum.Enum)` with OPEN, ON_HOLD, CLOSED, CANCELLED values
     - Define `JobRequisition(Base, AuditMixin, VersionMixin)` and `CandidateRequisition(Base, AuditMixin)` in `app/modules/requisitions/models.py` with `UniqueConstraint("candidate_id", "job_requisition_id")`
     - Define `DSARRequestType(str, enum.Enum)` and `DSARStatus(str, enum.Enum)` in `app/modules/privacy/models.py`
@@ -80,34 +80,34 @@ This implementation verifies 19 correctness properties:
     - Define `OrganizationRetentionPolicy(Base, AuditMixin)` with `UniqueConstraint("organization_id")` and integer defaults (730, 365, 2555)
     - _Requirements: 5.1, 6.1, 6.4_
 
-  - [ ] 2.6 Write Alembic migration for all candidate-lifecycle tables
+  - [x] 2.6 Write Alembic migration for all candidate-lifecycle tables
     - Generate DDL for all 13 tables: `candidates`, `resumes`, `candidate_job_history`, `domains`, `skills`, `candidate_skills`, `unmatched_skill_reviews`, `job_profiles`, `job_profile_skills`, `job_postings`, `job_requisitions`, `requisition_required_skills`, `candidate_requisitions`, `data_subject_access_requests`, `organization_retention_policies`
     - Include all indexes, unique constraints, and CHECK constraints from the DDL summary in the design
     - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 6.4_
 
 
-- [ ] 3. Implement Pydantic schemas for all modules
-  - [ ] 3.1 Create candidate and resume schemas
+- [x] 3. Implement Pydantic schemas for all modules
+  - [x] 3.1 Create candidate and resume schemas
     - `app/modules/candidates/schemas.py`: `CandidateCreate` (name, email required; phone, location optional), `CandidateUpdate` (all optional; includes `global_status`, `ineligibility_reason`), `CandidateResponse` (all fields; version for optimistic locking), `CandidateSearchParams` (name, email, status, page, page_size max 50)
     - `app/modules/resumes/schemas.py`: `ResumeUploadResponse` (resume_id, parse_status), `ResumeResponse` (all metadata and parsed fields), paginated list wrapper
     - Enforce max field lengths per requirements; every field must include `Field(description="...")` with description ≥10 characters
     - _Requirements: 1.1, 1.6, 2.1, 2.9_
 
-  - [ ] 3.2 Create skills, job profile, job posting, and requisition schemas
+  - [x] 3.2 Create skills, job profile, job posting, and requisition schemas
     - `app/modules/skills/schemas.py`: `DomainCreate`, `DomainResponse`, `SkillCreate`, `SkillResponse`, `CandidateSkillCreate` (proficiency_rank 1–5, years_of_experience 0–50), `CandidateSkillResponse`
     - `app/modules/job_profile/schemas.py`: `JobProfileCreate`, `JobProfileSkillCreate` (designation, required_proficiency_rank), `JobProfileResponse`
     - `app/modules/job_posting/schemas.py`: `JobPostingCreate` (job_profile_id required), `JobPostingFilter` (location, salary_filter_min, salary_filter_max, sourcing_channel), `JobPostingResponse`
     - `app/modules/requisitions/schemas.py`: `RequisitionCreate`, `RequisitionUpdate` (status, version), `RequisitionResponse`, `CandidateAssociationRequest` (candidate_id)
     - _Requirements: 3.1, 3.2, 3.3, 4.1, 4.2, 5.1, 5.4_
 
-  - [ ] 3.3 Create portal and privacy schemas
+  - [x] 3.3 Create portal and privacy schemas
     - `app/modules/portal/schemas.py`: `DSARCreateRequest` (request_type: Access | Erasure), `DSARResponse` (dsar_id, status, requested_at)
     - `app/modules/privacy/schemas.py`: `DSARManageResponse` (all DSAR fields), `DSARDenyRequest` (denial_reason, min 10 chars), `RetentionPolicyResponse`, `RetentionPolicyUpdate`
     - _Requirements: 6.1, 6.6, 6.7_
 
 
 - [ ] 4. Implement CandidateService and candidate router
-  - [ ] 4.1 Implement `CandidateService` in `app/modules/candidates/service.py`
+  - [x] 4.1 Implement `CandidateService` in `app/modules/candidates/service.py`
     - `create_candidate`: compute `email_hash = SHA-256(lower(email))` and `name_hash = SHA-256(lower(name))`; encrypt name, email, phone via `encrypt_field`; check `(org_id, email_hash)` uniqueness (409 on conflict); set `global_status=ACTIVE`; `db.add(candidate)`; `await db.flush()`; call `publish_event("candidate_created", ...)`
     - `transition_status`: validate transition against `VALID_TRANSITIONS` dict (400 on invalid); enforce `ineligibility_reason` non-whitespace when transitioning to INELIGIBLE (400 if missing); set `deleted_at`/`deleted_by` when transitioning to DELETED; call `publish_event("candidate_status_changed", ...)`
     - `search_candidates`: paginated query filtering `deleted_at IS NULL`; case-insensitive partial match on `name_hash` (exact) and `email_hash` (exact) for lookup; partial name search via `func.lower(Candidate.name_hash).contains()`; max 50 per page
@@ -148,7 +148,7 @@ This implementation verifies 19 correctness properties:
 
 
 - [ ] 5. Implement resume storage backends and upload service
-  - [ ] 5.1 Implement `StorageService`, `LocalStorageBackend`, and `S3StorageBackend` in `app/modules/resumes/storage.py`
+  - [x] 5.1 Implement `StorageService`, `LocalStorageBackend`, and `S3StorageBackend` in `app/modules/resumes/storage.py`
     - Define `ALLOWED_MIME_TYPES` set and `MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024`
     - `LocalStorageBackend.store`: create `{base_path}/{org_id}/` directory; write `{uuid4()}_{filename}`; return `local://{path}`
     - `LocalStorageBackend.delete`: unlink file if exists
@@ -201,7 +201,7 @@ This implementation verifies 19 correctness properties:
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. Implement skills taxonomy service and router
-  - [ ] 8.1 Implement `SkillService` in `app/modules/skills/service.py`
+  - [x] 8.1 Implement `SkillService` in `app/modules/skills/service.py`
     - `create_domain`: check name uniqueness (409 on conflict); insert `Domain`; return
     - `create_skill`: check `(domain_id, name)` uniqueness (409 on conflict); insert `Skill`; return
     - `match_and_link_skills(candidate_id, org_id, extracted_skills)`: for each skill name, execute `SELECT Skill WHERE func.lower(Skill.name) == skill_name.lower().strip()`; if matched → upsert `CandidateSkill(source=PARSED)`; if unmatched → insert `UnmatchedSkillReview` and log WARNING; zero skills → no-op; `await db.flush()`
@@ -229,7 +229,7 @@ This implementation verifies 19 correctness properties:
 
 
 - [ ] 9. Implement JobProfile service and router
-  - [ ] 9.1 Implement `JobProfileService` in `app/modules/job_profile/service.py`
+  - [x] 9.1 Implement `JobProfileService` in `app/modules/job_profile/service.py`
     - `create_job_profile(org_id, name, skills, created_by)`: insert `JobProfile`; for each skill entry insert `JobProfileSkill(designation, required_proficiency_rank)`; `await db.flush()`; return
     - `update_job_profile`: update name and skill associations; use `VersionMixin` optimistic locking (409 on `StaleDataError`)
     - `delete_job_profile`: soft-delete by setting `deleted_at`/`deleted_by`
@@ -243,7 +243,7 @@ This implementation verifies 19 correctness properties:
     - _Requirements: 4.1, 4.6_
 
 - [ ] 10. Implement JobPosting service and router
-  - [ ] 10.1 Implement `JobPostingService` in `app/modules/job_posting/service.py`
+  - [x] 10.1 Implement `JobPostingService` in `app/modules/job_posting/service.py`
     - `create_posting`: validate `job_profile_id` exists, belongs to org, and `deleted_at IS NULL` (400 if invalid); insert `JobPosting`; `await db.flush()`; return
     - `list_postings`: org-scoped query; apply location filter (`work_locations.any(location)`); apply salary overlap filter (`salary_min <= filter_max AND salary_max >= filter_min`) when both filter values provided; apply `sourcing_channel` exact match; paginated with offset/limit
     - `update_posting` / `delete_posting`: org-scoped; `VersionMixin` optimistic locking
