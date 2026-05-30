@@ -8,9 +8,10 @@ This guide provides step-by-step instructions for setting up and running the Tal
 2. [Installation](#installation)
 3. [Environment Configuration](#environment-configuration)
 4. [Database Setup](#database-setup)
-5. [Running the Application](#running-the-application)
-6. [Available Tasks](#available-tasks)
-7. [Troubleshooting](#troubleshooting)
+5. [pgAdmin Web UI](#pgadmin-web-ui)
+6. [Running the Application](#running-the-application)
+7. [Available Tasks](#available-tasks)
+8. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -268,22 +269,28 @@ ls -la /data/resumes
 
 ## Database Setup
 
-### Step 1: Start PostgreSQL with Docker Compose
+### Step 1: Start PostgreSQL with Invoke
 
 ```bash
-# Start the PostgreSQL database service
-docker-compose up -d postgres
+# Start the PostgreSQL database container
+poetry run invoke db-start
 
 # Verify the database is running
-docker-compose ps
-
-# Check database health
-docker-compose logs postgres
+docker ps  # Should show the PostgreSQL container
 ```
 
 The database will be available at `localhost:5432` with credentials from your `.env` file.
 
-### Step 2: Run Database Migrations
+### Step 2: Initialize Database Users and Schemas
+
+```bash
+# Initialize main database users and schemas
+poetry run invoke db-init-users
+```
+
+This creates the necessary database users and schemas defined in `database/create_user.sql`.
+
+### Step 3: Run Database Migrations
 
 Alembic manages database schema migrations.
 
@@ -295,7 +302,7 @@ poetry run invoke migrate
 poetry run invoke db-status
 ```
 
-### Step 3: Verify Database Connection
+### Step 4: Verify Database Connection
 
 ```bash
 # Test the database connection
@@ -303,6 +310,67 @@ poetry run invoke db-check
 ```
 
 You should see output confirming the database connection is successful.
+
+---
+
+## pgAdmin Web UI
+
+pgAdmin4 is a browser-based database management tool. Use it to inspect tables, run queries, and manage your local PostgreSQL instance.
+
+### Step 1: Configure pgAdmin Environment Variables
+
+Add the following to your `.env` file (copy from `.env.example` if not already present):
+
+```env
+PGADMIN_DEFAULT_EMAIL=admin@example.com
+PGADMIN_DEFAULT_PASSWORD=your_pgadmin_password
+PGADMIN_CONTAINER_NAME=local-pgadmin4
+PGADMIN_PORT=8080
+```
+
+### Step 2: Start pgAdmin
+
+```bash
+poetry run invoke db-admin-start
+```
+
+Once started, open your browser and navigate to **http://localhost:8080**.
+
+### Step 3: Log In
+
+Use the credentials you set in `.env`:
+
+| Field    | Value                          |
+|----------|--------------------------------|
+| Email    | `PGADMIN_DEFAULT_EMAIL`        |
+| Password | `PGADMIN_DEFAULT_PASSWORD`     |
+
+### Step 4: Register the Database Server
+
+After logging in, register your local PostgreSQL instance:
+
+1. In the left panel, right-click **Servers → Register → Server…**
+2. On the **General** tab, enter a name (e.g. `TalentKru Local`)
+3. Switch to the **Connection** tab and fill in:
+
+| Field                | Value                                                                 |
+|----------------------|-----------------------------------------------------------------------|
+| Host name/address    | `host.docker.internal` (pgAdmin runs in Docker) or `localhost`        |
+| Port                 | `5432`                                                                |
+| Maintenance database | `postgres`                                                            |
+| Username             | `postgres`                                                            |
+| Password             | value of `PG_ADMIN_PASSWORD` in your `.env`                          |
+| Service              | *(leave blank)*                                                       |
+
+4. Click **Save**. The server will appear in the left panel and you can start browsing databases and running queries.
+
+> **Tip:** Use `host.docker.internal` as the host when pgAdmin is running inside Docker (which it is when started via `invoke db-admin-start`). If you ever run pgAdmin outside Docker, use `localhost` instead.
+
+### Step 5: Stop pgAdmin
+
+```bash
+poetry run invoke db-admin-stop
+```
 
 ---
 
@@ -419,31 +487,36 @@ Expected response:
 ### Stop the Development Server
 
 ```bash
-# If running with poe dev or uvicorn
+# If running with invoke dev or uvicorn
 Press Ctrl+C in the terminal
-
-# If running with Docker Compose
-docker-compose down
 ```
 
-### Stop Only the Database
+### Stop the Database
 
 ```bash
-# Stop PostgreSQL without removing data
-docker-compose stop postgres
+# Stop PostgreSQL container (data persists in volume)
+poetry run invoke db-stop
 
-# Stop and remove the database container (data persists in volume)
-docker-compose down postgres
+# Remove PostgreSQL container and optionally volume
+poetry run invoke db-remove
+```
+
+### Stop pgAdmin
+
+```bash
+# Stop pgAdmin4 container
+poetry run invoke db-admin-stop
 ```
 
 ### Stop All Services
 
 ```bash
-# Stop all services and remove containers (data persists in volumes)
-docker-compose down
+# Quick teardown of development environment
+poetry run invoke dev-teardown
 
-# Stop all services and remove everything including volumes
-docker-compose down -v
+# This stops the PostgreSQL container (data persists)
+# To also remove the container and volume, run:
+poetry run invoke db-remove
 ```
 
 ---
@@ -522,16 +595,17 @@ pyenv install -v 3.12.0  # Verbose output shows what went wrong
 **Solution:**
 ```bash
 # Verify PostgreSQL is running
-docker-compose ps
+docker ps  # Should show the PostgreSQL container
 
 # Check database logs
-docker-compose logs postgres
+docker logs local-postgresql-db  # Or your PG_CONTAINER_NAME
 
 # Restart the database
-docker-compose restart postgres
+poetry run invoke db-stop
+poetry run invoke db-start
 
-# Verify connection with psql
-docker-compose exec postgres psql -U talentkru -d talentkru -c "SELECT 1"
+# Verify connection
+poetry run invoke db-check
 ```
 
 ### Issue: Port Already in Use
@@ -557,14 +631,15 @@ uvicorn app.main:app --port 8001
 **Solution:**
 ```bash
 # Check migration status
-poe db-status
+poetry run invoke db-status
 
 # Reset the database (WARNING: This deletes all data)
-docker-compose down -v postgres
-docker-compose up -d postgres
+poetry run invoke db-remove  # Choose 'y' to remove volume
+poetry run invoke db-start
+poetry run invoke db-init-users
 
 # Re-run migrations
-poe migrate
+poetry run invoke migrate
 ```
 
 ### Issue: Virtual Environment Issues
@@ -642,7 +717,7 @@ cd talentKru-server
 python --version  # Should show Python 3.12.x
 
 # 3. Start the database
-docker-compose up -d postgres
+poetry run invoke db-start
 
 # 4. Start the development server
 poetry run invoke dev
@@ -654,7 +729,7 @@ poetry run invoke test
 poetry run invoke lint
 
 # 7. When done, stop the server (Ctrl+C) and database
-docker-compose down
+poetry run invoke db-stop
 ```
 
 ### Creating Database Migrations

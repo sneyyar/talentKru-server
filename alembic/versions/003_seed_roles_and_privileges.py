@@ -87,8 +87,8 @@ def upgrade() -> None:
         sa.column("role_privilege_id", postgresql.UUID(as_uuid=True)),
         sa.column("role_name", sa.String),
         sa.column("privilege_id", postgresql.UUID(as_uuid=True)),
-        sa.column("created_at", sa.DateTime),
-        sa.column("updated_at", sa.DateTime),
+        sa.column("created_at", sa.DateTime(timezone=True)),
+        sa.column("updated_at", sa.DateTime(timezone=True)),
     )
     
     from datetime import datetime, timezone

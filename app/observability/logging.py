@@ -8,6 +8,7 @@ def add_correlation_id(logger, method, event_dict):
     return event_dict
 
 
+# Configure structlog with stdlib integration
 structlog.configure(
     processors=[
         structlog.stdlib.add_log_level,
@@ -18,7 +19,14 @@ structlog.configure(
     ],
     wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
     context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(),
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
+
+# Configure standard logging to output to console
+logging.basicConfig(
+    format="%(message)s",
+    level=logging.INFO,
 )
 
 

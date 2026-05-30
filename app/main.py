@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -9,16 +11,20 @@ from app.database import get_db_session
 from app.dependencies import require_super_admin
 from app.domain_events.retry import retry_failed_events
 from app.middleware.cors import DynamicCORSMiddleware
+from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.auth_extraction import AuthExtractionMiddleware
 from app.modules.agents.router import router as agents_router
-from app.modules.auth.router import router as auth_router
+from app.modules.auth.router import router as auth_router, get_revocation_cache
 from app.modules.candidates.router import router as candidates_router
 from app.modules.interviews.router import router as interviews_router
+from app.modules.invitations.router import router as invitations_router
 from app.modules.job_posting.router import router as job_posting_router
 from app.modules.job_profile.router import router as job_profile_router
 from app.modules.journeys.router import router as journeys_router
 from app.modules.matching.router import router as matching_router
 from app.modules.observability.router import router as observability_router
 from app.modules.organizations.router import router as organizations_router
+from app.modules.password_reset.router import router as password_reset_router
 from app.modules.portal.router import router as portal_router
 from app.modules.questionnaires.router import router as questionnaires_router
 from app.modules.rbac.router import router as rbac_router
@@ -33,11 +39,51 @@ from app.observability.tracing import instrument_app
 
 logger = get_logger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Application lifespan
+# ---------------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan context manager.
+    
+    Startup:
+    - Warm the RevocationCache from the RevokedToken table
+    
+    Shutdown:
+    - Cleanup resources
+    
+    Requirements: 4.4
+    """
+    # Startup
+    logger.info("Starting application lifespan")
+    
+    # Warm the revocation cache from the database
+    try:
+        from app.database import AsyncSessionFactory
+        async with AsyncSessionFactory() as db:
+            revocation_cache = get_revocation_cache()
+            await revocation_cache.warm_from_db(db)
+            logger.info("RevocationCache warmed from database")
+    except Exception as e:
+        logger.error("Failed to warm RevocationCache", error=str(e), exc_info=True)
+        raise
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down application lifespan")
+
+
 app = FastAPI(
     title="TalentKru.ai API",
     version=settings.APP_VERSION,
     openapi_url="/openapi.json",
     docs_url="/docs",
+    lifespan=lifespan,
 )
 
 # ---------------------------------------------------------------------------
@@ -78,12 +124,16 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 # Starlette processes middleware in LIFO order (last added = first executed),
 # so we add in reverse of the desired execution order:
 #   1. CorrelationIDMiddleware  (first to execute — generates X-Correlation-ID)
-#   2. DynamicCORSMiddleware    (second — resolves per-org CORS policy)
+#   2. AuthExtractionMiddleware (second — extracts org_id and org_rate_limit from JWT)
+#   3. RateLimitMiddleware      (third — applies rate limiting)
+#   4. DynamicCORSMiddleware    (fourth — resolves per-org CORS policy)
 # TODO: add StructuredLoggingMiddleware once implemented
 # TODO: add TracingMiddleware once implemented
 # TODO: add MetricsMiddleware once implemented
 # ---------------------------------------------------------------------------
 app.add_middleware(DynamicCORSMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(AuthExtractionMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 
 # Instrument the app with OpenTelemetry auto-instrumentation.
@@ -97,6 +147,8 @@ instrument_app(app)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(rbac_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
+app.include_router(invitations_router, prefix="/api/v1")
+app.include_router(password_reset_router, prefix="/api/v1")
 app.include_router(organizations_router, prefix="/api/v1")
 app.include_router(candidates_router, prefix="/api/v1")
 app.include_router(resumes_router, prefix="/api/v1")

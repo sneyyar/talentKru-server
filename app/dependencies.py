@@ -28,6 +28,9 @@ class Principal:
     user_id: UUID
     organization_id: UUID
     role: str
+    roles: list[str] | None = None  # List of all roles
+    jti: str | None = None  # JWT ID for revocation
+    obo_by: str | None = None  # SuperAdmin user ID if on-behalf-of
 
 
 # ---------------------------------------------------------------------------

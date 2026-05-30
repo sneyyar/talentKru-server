@@ -62,6 +62,9 @@ class Organization(Base, AuditMixin, VersionMixin):
     # CORS allowed origins — max 20 entries, each max 253 characters (Req 6.1)
     allowed_origins = Column(ARRAY(String(253)), nullable=False, server_default="{}")
 
+    # Rate limiting — requests per minute for authenticated endpoints (Req 8.3)
+    rate_limit_per_minute = Column(Integer, nullable=False, default=1000)
+
 
 class OrganizationEmailConfig(Base, AuditMixin, VersionMixin):
     """

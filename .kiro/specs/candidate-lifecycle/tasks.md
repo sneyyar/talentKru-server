@@ -6,6 +6,29 @@ Implement the core recruiting data layer for TalentKru.ai using FastAPI, async S
 
 All code follows the conventions established in the Platform Foundation and Identity and Access modules: async SQLAlchemy sessions, soft delete, AES-256-GCM PII encryption, structlog structured logging, domain events via `publish_event()`, and `require_role()` / `require_privilege()` dependency factories.
 
+## Correctness Properties Summary
+
+This implementation verifies 19 correctness properties:
+1. Candidate email uniqueness within organization
+2. GlobalStatus FSM — only valid transitions permitted
+3. Ineligible status requires IneligibilityReason
+4. Logical delete excludes candidate from search
+5. Resume file format and size validation
+6. ParseStatus transitions correctly on ingestion outcome
+7. Ingestion upserts all associated records on success
+8. Skill matching is case-insensitive
+9. Unmatched or zero skills do not block ingestion
+10. JobPosting requires a valid JobProfile
+11. Salary range overlap filter correctness
+12. Candidate-requisition association validation
+13. Requisition status FSM — transitions only on update
+14. DSAR Access workflow only triggered for RequestType=Access
+15. DSAR Erasure hard-deletes personal data and anonymizes audit trail
+16. Retention policy purge respects configured retention days
+17. Candidate expiry scheduler only affects qualifying Active candidates
+18. Role-based access enforcement
+19. DSAR denial requires minimum-length reason
+
 ---
 
 ## Tasks
@@ -451,16 +474,13 @@ All code follows the conventions established in the Platform Foundation and Iden
     { "id": 0, "tasks": ["1"] },
     { "id": 1, "tasks": ["2.1", "2.2", "2.3", "2.4", "2.5"] },
     { "id": 2, "tasks": ["2.6", "3.1", "3.2", "3.3"] },
-    { "id": 3, "tasks": ["4.1", "5.1", "8.1", "9.1"] },
-    { "id": 4, "tasks": ["4.2", "4.3", "4.4", "4.5", "5.2", "5.3", "8.2", "8.3", "9.2", "10.1"] },
-    { "id": 5, "tasks": ["4.6", "5.4", "6.1", "8.4", "10.2", "10.3", "10.4"] },
-    { "id": 6, "tasks": ["6.2", "6.3", "12.1"] },
-    { "id": 7, "tasks": ["12.2", "12.3", "12.4", "13.1"] },
-    { "id": 8, "tasks": ["13.2", "14.1", "14.3"] },
-    { "id": 9, "tasks": ["13.3", "13.4", "13.5", "13.6", "14.2", "14.4", "14.5"] },
-    { "id": 10, "tasks": ["15.1", "15.3", "15.4"] },
-    { "id": 11, "tasks": ["15.2"] },
-    { "id": 12, "tasks": ["17.1", "17.2", "17.3", "17.4", "17.5", "17.6", "17.7"] }
+    { "id": 3, "tasks": ["4.1", "5.1", "8.1", "9.1", "10.1"] },
+    { "id": 4, "tasks": ["4.2", "4.3", "4.4", "4.5", "4.6", "5.2", "5.3", "5.4", "6.1", "8.2", "8.3", "8.4", "9.2", "10.2", "10.3", "10.4"] },
+    { "id": 5, "tasks": ["6.2", "6.3", "12.1"] },
+    { "id": 6, "tasks": ["12.2", "12.3", "12.4", "13.1", "13.2"] },
+    { "id": 7, "tasks": ["13.3", "13.4", "13.5", "13.6", "14.1", "14.2", "14.3", "14.4", "14.5"] },
+    { "id": 8, "tasks": ["15.1", "15.2", "15.3", "15.4"] },
+    { "id": 9, "tasks": ["17.1", "17.2", "17.3", "17.4", "17.5", "17.6", "17.7"] }
   ]
 }
 ```

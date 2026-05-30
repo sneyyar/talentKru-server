@@ -6,75 +6,75 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
 
 ## Tasks
 
-- [ ] 1. Set up module structure, base configuration, and shared crypto utilities
+- [x] 1. Set up module structure, base configuration, and shared crypto utilities
   - Create directory tree: `app/modules/{auth,users,rbac,invitations,password_reset}/` with `__init__.py` files
   - Create `app/crypto.py` with `encrypt_field` / `decrypt_field` using AES-256-GCM (96-bit nonce, base64 output)
   - Create `app/config.py` `Settings` model (Pydantic) with `JWT_SIGNING_KEY` and `ENCRYPTION_KEY`; raise `ValidationError` on startup if either is missing or empty
   - Add `pytest`, `pytest-asyncio`, `hypothesis`, `httpx`, `pytest-mock` to `pyproject.toml` test dependencies
   - _Requirements: 3.3, 3.10, 7.1, 7.2_
 
-  - [ ] 1.1 Implement `encrypt_field` and `decrypt_field` in `app/crypto.py`
+  - [x] 1.1 Implement `encrypt_field` and `decrypt_field` in `app/crypto.py`
     - AES-256-GCM with fresh 96-bit nonce per call; base64-encode `nonce + ciphertext`
     - Derive 32-byte key from `ENCRYPTION_KEY` via SHA-256
     - _Requirements: 7.1, 7.2_
 
-  - [ ]* 1.2 Write property test for PII encryption round-trip (Property 13)
+  - [x] 1.2 Write property test for PII encryption round-trip (Property 13)
     - **Property 13: PII encryption round-trip**
     - **Validates: Requirements 7.1, 7.2**
     - Use `@given(plaintext=st.text(min_size=1, max_size=254))` with `max_examples=200`
     - Assert `encrypt_field(p) != p` and `decrypt_field(encrypt_field(p)) == p`
 
 
-- [ ] 2. Implement SQLAlchemy data models
-  - [ ] 2.1 Create `User` and `PasswordHistory` models in `app/modules/users/models.py`
+- [x] 2. Implement SQLAlchemy data models
+  - [x] 2.1 Create `User` and `PasswordHistory` models in `app/modules/users/models.py`
     - `User`: `user_id`, `organization_id`, `email` (VARCHAR 512, encrypted), `email_hash` (VARCHAR 64, SHA-256), `given_name`, `last_name`, `status` (enum: Active/Inactive/Locked/PendingInvitation), `manager_user_id`, `hashed_password` (nullable), `failed_login_attempts`, `last_failed_login_at`, `locale`, plus `AuditMixin` and `VersionMixin`
     - `UniqueConstraint("organization_id", "email_hash", name="uq_users_org_email")`
     - `PasswordHistory`: `password_history_id`, `user_id` (FK), `hashed_password`, `created_at`; index on `(user_id, created_at DESC)`
     - _Requirements: 1.1, 1.8, 7.1_
 
-  - [ ] 2.2 Create `RefreshToken` and `RevokedToken` models in `app/modules/auth/models.py`
+  - [x] 2.2 Create `RefreshToken` and `RevokedToken` models in `app/modules/auth/models.py`
     - `RefreshToken`: `refresh_token_id`, `user_id` (FK), `token_hash` (UNIQUE), `expires_at`, `is_revoked`, `issued_at`, `replaced_by_token_id` (nullable self-FK)
     - `RevokedToken`: `revoked_token_id`, `jti` (UNIQUE, indexed), `revoked_at`, `expires_at`, `user_id`, `reason`; index on `expires_at` for cleanup
     - _Requirements: 4.1, 4.4, 4.7_
 
-  - [ ] 2.3 Create RBAC models in `app/modules/rbac/models.py`
+  - [x] 2.3 Create RBAC models in `app/modules/rbac/models.py`
     - `Role`: `role_name` (PK), `description`
     - `UserRole`: `user_role_id`, `user_id` (FK), `role_name` (FK); `UniqueConstraint("user_id", "role_name")`; `AuditMixin`
     - `Privilege`: `privilege_id`, `name` (UNIQUE), `description`, `resource_category`
     - `RolePrivilege`: `role_privilege_id`, `role_name` (FK), `privilege_id` (FK); `UniqueConstraint("role_name", "privilege_id")`; `AuditMixin`
     - _Requirements: 5.1, 5.2, 6.1, 6.2_
 
-  - [ ] 2.4 Create `InvitationToken` and `PasswordResetToken` models
+  - [x] 2.4 Create `InvitationToken` and `PasswordResetToken` models
     - `InvitationToken` in `app/modules/invitations/models.py`: `invitation_token_id`, `user_id` (FK), `token_hash` (UNIQUE), `expires_at` (72 h), `is_used`, `created_at`
     - `PasswordResetToken` in `app/modules/password_reset/models.py`: `password_reset_token_id`, `user_id` (FK), `token_hash` (UNIQUE), `expires_at` (15 min), `is_used`, `created_at`
     - _Requirements: 9.1, 10.1_
 
 
-- [ ] 3. Create Alembic migration and seed data
-  - [ ] 3.1 Write Alembic migration for all Identity and Access tables
+- [x] 3. Create Alembic migration and seed data
+  - [x] 3.1 Write Alembic migration for all Identity and Access tables
     - Generate DDL for `users`, `password_history`, `refresh_tokens`, `revoked_tokens`, `roles`, `user_roles`, `privileges`, `role_privileges`, `invitation_tokens`, `password_reset_tokens`
     - Include all indexes and unique constraints from the DDL summary in the design
     - _Requirements: 1.1, 4.1, 5.1, 6.1, 9.1, 10.1_
 
-  - [ ] 3.2 Write seed data migration for roles and default privilege mappings
+  - [x] 3.2 Write seed data migration for roles and default privilege mappings
     - Insert all 7 roles: `SuperAdministrator`, `Administrator`, `Recruiter`, `HiringManager`, `CommitteeMember`, `HRManager`, `Interviewer`
     - Insert default privileges (`users:read`, `users:write`, `roles:assign`, `privileges:manage`, `candidates:write`, `requisitions:write`, `journeys:transition`, `interviews:feedback`, `reports:read`) and their default role assignments
     - _Requirements: 5.1, 6.1, 6.3_
 
 
-- [ ] 4. Implement RevocationCache and RateLimiter infrastructure
-  - [ ] 4.1 Implement `RevocationCache` in `app/modules/auth/service.py`
+- [x] 4. Implement RevocationCache and RateLimiter infrastructure
+  - [x] 4.1 Implement `RevocationCache` in `app/modules/auth/service.py`
     - Thread-safe in-memory dict keyed by JTI; configurable TTL (default 300 s)
     - `revoke(jti)`, `is_revoked(jti)` with lazy eviction of expired entries
     - Startup warm-up: load all non-expired JTIs from `RevokedToken` table on app lifespan start
     - _Requirements: 4.4_
 
-  - [ ] 4.2 Implement `SlidingWindowCounter` and `RateLimiter` in `app/middleware/rate_limit.py`
+  - [x] 4.2 Implement `SlidingWindowCounter` and `RateLimiter` in `app/middleware/rate_limit.py`
     - `SlidingWindowCounter`: thread-safe `deque` of monotonic timestamps; `is_allowed()` returns `(bool, retry_after_seconds)`
     - `RateLimiter`: dict keyed by `(endpoint_group, identifier)`; `check(key, window_seconds, max_requests)` returns `retry_after_seconds`
     - _Requirements: 8.7_
 
-  - [ ] 4.3 Implement `RateLimitMiddleware` as a FastAPI middleware in `app/middleware/rate_limit.py`
+  - [x] 4.3 Implement `RateLimitMiddleware` as a FastAPI middleware in `app/middleware/rate_limit.py`
     - Apply IP-based sliding window on `POST /token` and `POST /token/refresh` (5 failures / 5 min; 15-min lockout with `Retry-After` header)
     - Apply per-tenant rate limiting on all authenticated endpoints (configurable per org, default 1000 req/min; return `X-RateLimit-*` headers)
     - Apply per-agent rate limiting on `/internal/agents/` routes (default 100 req/min; keyed by `X-Agent-API-Key`)
@@ -93,8 +93,8 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - Generate org with configured limit N; send N+1 requests; assert last returns 429 with `X-RateLimit-*` headers
 
 
-- [ ] 5. Implement UserService and user management endpoints
-  - [ ] 5.1 Implement `UserService` in `app/modules/users/service.py`
+- [x] 5. Implement UserService and user management endpoints
+  - [x] 5.1 Implement `UserService` in `app/modules/users/service.py`
     - `create_user`: validate email format and required fields (422); compute `email_hash = SHA-256(lower(email))`; encrypt email via `encrypt_field`; check `(org_id, email_hash)` uniqueness (409 on conflict); set `status=PendingInvitation`; `hashed_password=None`
     - `update_user`: validate fields; handle status transitions; enforce org-scoping
     - `list_users`: paginated query (default page size 20, max 100); exclude soft-deleted records
@@ -108,7 +108,7 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - Use `@given(email=st.emails(), given_name=st.text(min_size=1, max_size=100), last_name=st.text(min_size=1, max_size=100))` with `max_examples=100`
     - Same email + same org → second call raises 409; same email + different orgs → both succeed
 
-  - [ ] 5.3 Implement user management router in `app/modules/users/router.py`
+  - [x] 5.3 Implement user management router in `app/modules/users/router.py`
     - `GET /users` (paginated), `POST /users`, `PATCH /users/{user_id}` — all restricted to `Administrator` or `SuperAdministrator` via `require_role`
     - `DELETE /admin/users/{user_id}/sessions` — restricted to `Administrator` or `SuperAdministrator`
     - _Requirements: 1.6, 4.6_
@@ -121,8 +121,8 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - _Requirements: 1.2, 1.7, 1.8, 1.9_
 
 
-- [ ] 6. Implement AuthService, JWT issuance, and authentication endpoint
-  - [ ] 6.1 Implement `AuthService.authenticate` and JWT issuance in `app/modules/auth/service.py`
+- [x] 6. Implement AuthService, JWT issuance, and authentication endpoint
+  - [x] 6.1 Implement `AuthService.authenticate` and JWT issuance in `app/modules/auth/service.py`
     - Look up user by `email_hash` within `org_id`; verify bcrypt hash; handle Locked/Inactive (401)
     - `_issue_access_token`: HS256 JWT with `sub`, `org_id`, `roles`, `exp` (+60 min), `iat`, `jti` (UUID4)
     - `_issue_refresh_token`: `secrets.token_bytes(32).hex()`; store SHA-256 hash in `RefreshToken` table
@@ -153,14 +153,14 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - **Validates: Requirements 1.4, 3.8**
     - For any user with `status in (Locked, Inactive)`, any POST /token attempt returns 401
 
-  - [ ] 6.6 Implement `POST /token` router in `app/modules/auth/router.py`
+  - [x] 6.6 Implement `POST /token` router in `app/modules/auth/router.py`
     - Accept `application/x-www-form-urlencoded` (`OAuth2PasswordRequestForm`); return `TokenResponse`
     - Return 422 if `email` or `password` missing; return 401 on invalid credentials (no field disclosure)
     - _Requirements: 3.1, 3.2, 3.9_
 
 
-- [ ] 7. Implement token refresh, revocation, and JWT dependency
-  - [ ] 7.1 Implement `AuthService.refresh` and token family revocation in `app/modules/auth/service.py`
+- [x] 7. Implement token refresh, revocation, and JWT dependency
+  - [x] 7.1 Implement `AuthService.refresh` and token family revocation in `app/modules/auth/service.py`
     - Hash submitted token; look up `RefreshToken` by hash; check `is_revoked` and `expires_at`
     - On valid token: mark old token `is_revoked=True`, set `replaced_by_token_id`; issue new access + refresh tokens
     - On revoked token (theft): walk `replaced_by_token_id` chain; revoke all family members; add all JTIs to `RevocationCache` and `RevokedToken` table; return 401
@@ -188,22 +188,23 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - **Validates: Requirements 4.5**
     - Change user status to Locked or Inactive; assert all `RefreshToken.is_revoked=True` and active JTIs in revocation list
 
-  - [ ] 7.6 Implement `get_current_principal`, `require_role`, `require_privilege` in `app/modules/auth/dependencies.py`
+  - [x] 7.6 Implement `get_current_principal`, `require_role`, `require_privilege` in `app/modules/auth/dependencies.py`
     - `get_current_principal`: decode JWT with `JWT_SIGNING_KEY`; check `exp`; check `jti` in `RevocationCache`; return `Principal`
     - `require_role(*roles)`: dependency factory; 403 if principal holds none of the required roles
     - `require_privilege(privilege_name)`: dependency factory; DB lookup of role→privilege mapping; 403 if not found
     - _Requirements: 3.5, 3.6, 4.4, 5.3, 5.6, 6.4_
 
-  - [ ] 7.7 Implement `POST /token/refresh` router in `app/modules/auth/router.py`
+  - [x] 7.7 Implement `POST /token/refresh` router in `app/modules/auth/router.py`
     - Accept `RefreshRequest`; delegate to `AuthService.refresh`; return `TokenResponse` or 401
     - _Requirements: 4.2, 4.3_
 
 
-- [ ] 8. Checkpoint — core auth working
-  - Ensure all tests pass, ask the user if questions arise.
+- [x] 8. Checkpoint — core auth working ✅ COMPLETE
+  - ✅ All 9 tests passing (0.28 seconds)
+  - ✅ Core authentication flow verified
 
-- [ ] 9. Implement RBAC service and role management endpoints
-  - [ ] 9.1 Implement `RBACService` in `app/modules/rbac/service.py`
+- [x] 9. Implement RBAC service and role management endpoints ✅ COMPLETE
+  - [x] 9.1 Implement `RBACService` in `app/modules/rbac/service.py` ✅ COMPLETE
     - `assign_role(user_id, role_name, actor)`: validate role name in supported list (400 on unknown); check duplicate (400 if already held); insert `UserRole`; write audit log entry
     - `remove_role(user_id, role_name, actor)`: soft-delete `UserRole`; write audit log entry
     - `list_roles()`, `get_user_roles(user_id)`: read-only queries
@@ -219,15 +220,15 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - **Validates: Requirements 5.8**
     - For any role assignment or removal, assert audit log entry created with actor UserID, affected user, role name, operation, timestamp; assert no audit entry on read-only access
 
-  - [ ] 9.4 Implement RBAC router in `app/modules/rbac/router.py`
+  - [x] 9.4 Implement RBAC router in `app/modules/rbac/router.py`
     - `GET /roles`, `POST /roles/{role_name}/users/{user_id}` (assign), `DELETE /roles/{role_name}/users/{user_id}` (remove) — restricted to `Administrator` or `SuperAdministrator`
     - `GET /roles/{role_name}/privileges`, `GET /privileges` — restricted to `Administrator` or `SuperAdministrator`
     - `POST /roles/{role_name}/privileges`, `DELETE /roles/{role_name}/privileges/{privilege_id}` — restricted to `SuperAdministrator`
     - _Requirements: 5.1, 5.6, 6.5, 6.6_
 
 
-- [ ] 10. Implement privilege management service
-  - [ ] 10.1 Implement privilege management in `app/modules/rbac/service.py`
+- [x] 10. Implement privilege management service
+  - [x] 10.1 Implement privilege management in `app/modules/rbac/service.py`
     - `assign_privilege(role_name, privilege_id, actor)`: verify `privilege_id` exists in system set (400 if not); insert `RolePrivilege`; write audit log
     - `remove_privilege(role_name, privilege_id, actor)`: check remaining privilege count; reject with 400 if removal would leave role with 0 privileges; soft-delete `RolePrivilege`; write audit log
     - `list_privileges()`, `get_role_privileges(role_name)`: read-only queries
@@ -245,8 +246,8 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - _Requirements: 6.7, 6.9_
 
 
-- [ ] 11. Implement SuperAdmin impersonation
-  - [ ] 11.1 Implement `impersonate` in `app/modules/auth/service.py`
+- [x] 11. Implement SuperAdmin impersonation
+  - [x] 11.1 Implement `impersonate` in `app/modules/auth/service.py`
     - Reject if `principal.obo_by is not None` (nested impersonation → 403)
     - Look up target user by `(target_user_id, target_org_id)`; 404 if not found
     - Verify target holds `Administrator` role; 403 if not
@@ -264,7 +265,7 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - **Validates: Requirements 2.6**
     - For any OBO JWT, assert requests to resources in a different org return 403
 
-  - [ ] 11.4 Implement `POST /admin/impersonate` router in `app/modules/auth/router.py`
+  - [x] 11.4 Implement `POST /admin/impersonate` router in `app/modules/auth/router.py`
     - Restricted to `SuperAdministrator` via `require_role`; accept `ImpersonateRequest`; return `TokenResponse`
     - _Requirements: 2.1, 2.5_
 
@@ -275,8 +276,8 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - _Requirements: 2.2, 2.3, 2.4_
 
 
-- [ ] 12. Implement invitation service and endpoints
-  - [ ] 12.1 Implement `InvitationService` in `app/modules/invitations/service.py`
+- [x] 12. Implement invitation service and endpoints
+  - [x] 12.1 Implement `InvitationService` in `app/modules/invitations/service.py`
     - `generate_invitation(user_id, db)`: `secrets.token_bytes(32).hex()`; store SHA-256 hash in `InvitationToken` with `expires_at = now + 72h`, `is_used=False`
     - `send_invitation_email(user, token, org_name)`: dispatch email with invitation link embedding plain-text token, user's `GivenName`, org name, and expiry time
     - `accept_invitation(token, password, db)`: hash token; look up `InvitationToken`; reject (400) if not found, `is_used`, or `expires_at < now`; validate password policy (422 on violation, token stays unused); bcrypt-hash password; set `hashed_password`; set `status=Active`; mark `is_used=True`; append to `PasswordHistory`; write audit log (`AccountActivated`)
@@ -298,14 +299,14 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - **Validates: Requirements 9.3, 9.8**
     - For valid token + policy-compliant password, assert `status=Active`, bcrypt hash stored, `is_used=True`, `PasswordHistory` entry added, audit log entry with `AccountActivated`
 
-  - [ ] 12.5 Implement invitation router in `app/modules/invitations/router.py`
+  - [x] 12.5 Implement invitation router in `app/modules/invitations/router.py`
     - `POST /auth/invitation/accept` — public (no JWT required); rate-limited (10/10 min per IP)
     - `POST /auth/invitation/resend` — restricted to `Administrator` or `SuperAdministrator`
     - _Requirements: 9.3, 9.6, 9.9_
 
 
-- [ ] 13. Implement password reset service and endpoints
-  - [ ] 13.1 Implement `PasswordResetService` in `app/modules/password_reset/service.py`
+- [x] 13. Implement password reset service and endpoints
+  - [x] 13.1 Implement `PasswordResetService` in `app/modules/password_reset/service.py`
     - `request_reset(email, db)`: look up user by `email_hash`; if not found, Locked, or Inactive → return 200 silently (no email); otherwise generate `secrets.token_bytes(32).hex()`; store SHA-256 hash in `PasswordResetToken` with `expires_at = now + 15 min`, `is_used=False`; dispatch email with plain-text token
     - `confirm_reset(token, new_password, db)`: hash token; look up `PasswordResetToken`; reject (400) if not found, `is_used`, or expired; validate password policy (422 on violation, token stays unused); check password history (422 if matches last 5); bcrypt-hash; update `hashed_password`; mark `is_used=True`; append to `PasswordHistory`; call `revoke_all_user_tokens(user_id)`; write audit log (`PasswordReset`)
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.10_
@@ -332,19 +333,19 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - Use `@given(email=st.emails())` with `max_examples=100`
     - Assert `POST /auth/password-reset/request` always returns 200 regardless of whether email exists
 
-  - [ ] 13.6 Implement password reset router in `app/modules/password_reset/router.py`
+  - [x] 13.6 Implement password reset router in `app/modules/password_reset/router.py`
     - `POST /auth/password-reset/request` — public (no JWT); rate-limited (3/10 min per IP); always 200
     - `POST /auth/password-reset/confirm` — public (no JWT); rate-limited (5/10 min per IP)
     - _Requirements: 10.1, 10.8, 10.9, 10.11_
 
 
-- [ ] 14. Implement audit logging and soft delete
-  - [ ] 14.1 Implement `write_audit_log` helper in `app/audit.py`
+- [x] 14. Implement audit logging and soft delete
+  - [x] 14.1 Implement `write_audit_log` helper in `app/audit.py`
     - Accept `actor_id`, `action`, `target_entity`, `target_id`, `org_id`, `changed_values` (dict), `obo_by` (optional), `timestamp`
     - Persist to `audit_log` table (or structured JSON log via structlog if table not yet defined)
     - _Requirements: 7.3, 2.4, 2.5, 5.8, 6.9, 9.8, 10.10_
 
-  - [ ] 14.2 Wire audit log calls into all service methods that require it
+  - [x] 14.2 Wire audit log calls into all service methods that require it
     - User create/update, role assign/remove, privilege assign/remove, impersonation start, invitation accept (`AccountActivated`), password reset (`PasswordReset`), session revocation
     - Ensure OBO sessions pass `obo_by` from `Principal` to every audit entry
     - _Requirements: 2.5, 5.8, 6.9, 7.3_
@@ -361,15 +362,15 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - _Requirements: 7.3, 2.5, 5.8_
 
 
-- [ ] 15. Wire all modules into the FastAPI application
-  - [ ] 15.1 Register all routers and middleware in `app/main.py`
+- [x] 15. Wire all modules into the FastAPI application
+  - [x] 15.1 Register all routers and middleware in `app/main.py`
     - Include `auth`, `users`, `rbac`, `invitations`, `password_reset` routers under `/api/v1` prefix
     - Add `RateLimitMiddleware` to the middleware stack
     - Register lifespan handler: warm `RevocationCache` from `RevokedToken` table on startup
     - Exempt `POST /token`, `POST /token/refresh`, `POST /auth/invitation/accept`, `POST /auth/password-reset/request`, `POST /auth/password-reset/confirm`, and health check from JWT auth requirement
     - _Requirements: 3.6, 4.4, 5.6, 10.11_
 
-  - [ ] 15.2 Add Pydantic schemas for all request/response models
+  - [x] 15.2 Add Pydantic schemas for all request/response models
     - `app/modules/auth/schemas.py`: `LoginRequest`, `RefreshRequest`, `ImpersonateRequest`, `TokenResponse`
     - `app/modules/users/schemas.py`: `UserCreate`, `UserUpdate`, `UserResponse` (with pagination wrapper)
     - `app/modules/rbac/schemas.py`: `RoleAssignRequest`, `PrivilegeResponse`, `RolePrivilegeResponse`
@@ -399,7 +400,7 @@ Implement the foundational security layer for TalentKru.ai using FastAPI, async 
     - All 7 roles exist in DB after migration; default privilege mappings present
     - _Requirements: 3.10, 5.1, 6.3_
 
-- [ ] 16. Final checkpoint — Ensure all tests pass
+- [x] 16. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 

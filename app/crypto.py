@@ -46,3 +46,15 @@ def decrypt_field(encoded: str) -> str:
     raw = base64.b64decode(encoded)
     nonce, ciphertext = raw[:12], raw[12:]
     return aesgcm.decrypt(nonce, ciphertext, None).decode()
+
+
+def hash_email(email: str) -> str:
+    """Compute SHA-256 hash of lowercase email for uniqueness enforcement.
+    
+    Args:
+        email: The email address to hash
+        
+    Returns:
+        Hex-encoded SHA-256 hash of the lowercase email
+    """
+    return hashlib.sha256(email.lower().encode()).hexdigest()
