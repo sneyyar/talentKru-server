@@ -23,13 +23,7 @@ from app.modules.job_profile.schemas import (
     JobProfileCreate,
     JobProfileResponse,
 )
-from app.modules.job_profile.service import (
-    create_job_profile,
-    get_job_profile,
-    list_job_profiles,
-    update_job_profile,
-    delete_job_profile,
-)
+from app.modules.job_profile.service import JobProfileService
 
 router = APIRouter(prefix="/job-profiles", tags=["job-profiles"])
 
@@ -79,11 +73,11 @@ async def create_job_profile_endpoint(
         HTTPException(403): If user does not have Recruiter role
         HTTPException(422): If skill proficiency rank is not 1-5 or designation is invalid
     """
-    job_profile = await create_job_profile(
+    service = JobProfileService(db)
+    job_profile = await service.create_job_profile(
         org_id=principal.organization_id,
         data=request,
         created_by=principal.user_id,
-        db=db,
     )
     await db.commit()
     return JobProfileResponse.from_orm(job_profile)
@@ -131,10 +125,10 @@ async def list_job_profiles_endpoint(
     Raises:
         HTTPException(403): If user does not have required role
     """
+    service = JobProfileService(db)
     offset = (page - 1) * page_size
-    job_profiles = await list_job_profiles(
+    job_profiles = await service.list_job_profiles(
         org_id=principal.organization_id,
-        db=db,
         offset=offset,
         limit=page_size,
     )
@@ -183,10 +177,10 @@ async def get_job_profile_endpoint(
         HTTPException(403): If user does not have required role
         HTTPException(404): If job profile does not exist or is deleted
     """
-    job_profile = await get_job_profile(
+    service = JobProfileService(db)
+    job_profile = await service.get_job_profile(
         org_id=principal.organization_id,
         job_profile_id=job_profile_id,
-        db=db,
     )
     return JobProfileResponse.from_orm(job_profile)
 
@@ -246,12 +240,12 @@ async def update_job_profile_endpoint(
         HTTPException(409): If optimistic locking version is stale
         HTTPException(422): If skill proficiency rank is not 1-5 or designation is invalid
     """
-    job_profile = await update_job_profile(
+    service = JobProfileService(db)
+    job_profile = await service.update_job_profile(
         org_id=principal.organization_id,
         job_profile_id=job_profile_id,
         name=request.name,
         skills=request.skills,
-        db=db,
     )
     await db.commit()
     return JobProfileResponse.from_orm(job_profile)
@@ -294,10 +288,10 @@ async def delete_job_profile_endpoint(
         HTTPException(403): If user does not have Recruiter role
         HTTPException(404): If job profile does not exist or is deleted
     """
-    await delete_job_profile(
+    service = JobProfileService(db)
+    await service.delete_job_profile(
         org_id=principal.organization_id,
         job_profile_id=job_profile_id,
         deleted_by=principal.user_id,
-        db=db,
     )
     await db.commit()

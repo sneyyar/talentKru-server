@@ -1,6 +1,10 @@
 # Tech Stack & Build System
 
-**Last Updated:** May 30, 2026
+**Last Updated:** May 31, 2026
+
+## Overview
+
+This document covers the technology stack, build system, dependency management, and Python execution standards for TalentKru.ai.
 
 ## Technology Stack
 
@@ -427,60 +431,38 @@ uv run pytest --cov=app --cov-report=html
 
 ## Python Execution Standards
 
-### Always Use `uv run` for Python Operations
+**All Python executions must be prepended with `uv run`** to ensure consistent environment management, correct Python version (3.12.x), and proper dependency isolation.
 
-All Python executions must be prepended with `uv run` to ensure consistent environment management and dependency isolation.
+### Common Python Operations
 
-#### Execute Scripts
 ```zsh
-# ✅ CORRECT
+# Scripts
 uv run script_name.py
 uv run script_name.py --arg value
 
-# ❌ WRONG
-python script_name.py
-python3 script_name.py
-```
-
-#### Run Testing Frameworks
-```zsh
-# ✅ CORRECT
+# Testing
 uv run pytest
 uv run pytest tests/test_auth_service.py
 uv run pytest --cov=app --cov-report=html
 
-# ❌ WRONG
-pytest
-python -m pytest
-```
-
-#### Launch Interactive REPL
-```zsh
-# ✅ CORRECT
-uv run python
-
-# ❌ WRONG
-python
-python3
-```
-
-#### Run Other Python Tools
-```zsh
-# ✅ CORRECT
+# Code Quality
 uv run mypy app
 uv run ruff check app tests
-uv run alembic upgrade head
+uv run ruff format app tests
 
-# ❌ WRONG
-mypy app
-ruff check app tests
-alembic upgrade head
+# Database
+uv run alembic upgrade head
+uv run alembic downgrade -1
+
+# Interactive REPL
+uv run python
+uv run ipython
 ```
 
 ### Why `uv run`?
 
-1. **Environment Isolation**: Ensures correct Python version and dependencies
-2. **Consistency**: All developers use the same environment
+1. **Environment Isolation**: Correct Python version and dependencies
+2. **Consistency**: All developers use identical environments
 3. **Reproducibility**: Lock file guarantees exact versions
-4. **Safety**: Prevents accidental use of system Python or wrong virtual environment
-5. **Simplicity**: No need to manually activate virtual environments
+4. **Safety**: Prevents accidental use of system Python
+5. **Simplicity**: No manual virtual environment activation needed

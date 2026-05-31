@@ -8,10 +8,11 @@ This guide provides step-by-step instructions for setting up and running the Tal
 2. [Installation](#installation)
 3. [Environment Configuration](#environment-configuration)
 4. [Database Setup](#database-setup)
-5. [pgAdmin Web UI](#pgadmin-web-ui)
-6. [Running the Application](#running-the-application)
-7. [Available Tasks](#available-tasks)
-8. [Troubleshooting](#troubleshooting)
+5. [PostgreSQL Command-Line Client (psql)](#postgresql-command-line-client-(psql))
+6. [pgAdmin Web UI](#pgadmin-web-ui)
+7. [Running the Application](#running-the-application)
+8. [Available Tasks](#available-tasks)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -310,6 +311,106 @@ poetry run invoke db-check
 ```
 
 You should see output confirming the database connection is successful.
+
+---
+
+## PostgreSQL Command-Line Client (psql)
+
+The `psql` utility allows you to connect to PostgreSQL directly from your terminal for running queries and managing the database.
+
+### Step 1: Install psql
+
+On macOS, install the PostgreSQL client tools using Homebrew:
+
+```bash
+# Install libpq (includes psql)
+brew install libpq
+
+# Verify installation
+psql --version
+```
+
+### Step 2: Add psql to Your PATH
+
+Add the libpq binary directory to your shell's PATH so you can run `psql` from anywhere:
+
+```bash
+# For zsh (default on macOS Monterey and later)
+echo 'export PATH="/opt/homebrew/opt/libpq/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# For bash
+echo 'export PATH="/opt/homebrew/opt/libpq/bin:$PATH"' >> ~/.bash_profile
+source ~/.bash_profile
+
+# Verify psql is now accessible
+which psql  # Should show /opt/homebrew/opt/libpq/bin/psql
+```
+
+### Step 3: Connect to the Database
+
+You can connect to PostgreSQL using either the application user or the admin user.
+
+#### Connect as the Application User
+
+Use the application credentials created for your project:
+
+```bash
+# Using command-line arguments
+psql -h localhost -p 5432 -U talentkru_app -d krudb
+
+# Or using a connection string
+psql postgresql://talentkru_app@localhost:5432/krudb
+```
+
+#### Connect as the Admin User
+
+Use the default PostgreSQL admin credentials:
+
+```bash
+# Using command-line arguments
+psql -h localhost -p 5432 -U postgres -d krudb
+```
+
+### Step 4: Common psql Commands
+
+Once connected, you can run SQL queries and commands:
+
+```sql
+-- List all databases
+\l
+
+-- Connect to a specific database
+\c krudb
+
+-- List all tables in the current schema
+\dt
+
+-- Describe a specific table
+\d table_name
+
+-- List all schemas
+\dn
+
+-- Show current user
+\conninfo
+
+-- Exit psql
+\q
+```
+
+### Example: Querying the Database
+
+```bash
+# Connect as the application user
+psql -h localhost -p 5432 -U talentkru_app -d krudb
+
+# Once connected, run a query
+SELECT * FROM talentkru.users LIMIT 5;
+
+# Exit
+\q
+```
 
 ---
 

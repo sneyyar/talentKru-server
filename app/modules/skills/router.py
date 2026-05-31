@@ -27,11 +27,7 @@ from app.modules.skills.schemas import (
     CandidateSkillCreate,
     CandidateSkillResponse,
 )
-from app.modules.skills.service import (
-    create_domain,
-    create_skill,
-    add_candidate_skill,
-)
+from app.modules.skills.service import SkillService
 from app.modules.skills.models import (
     Domain,
     Skill,
@@ -101,7 +97,8 @@ async def create_domain_endpoint(
     Requirements: 3.1
     """
     try:
-        domain = await create_domain(db, request.name)
+        service = SkillService(db)
+        domain = await service.create_domain(request.name)
         await db.commit()
         return DomainResponse.from_orm(domain)
     except HTTPException:
@@ -201,7 +198,8 @@ async def create_skill_endpoint(
         )
 
     try:
-        skill = await create_skill(db, domain_id, request.name)
+        service = SkillService(db)
+        skill = await service.create_skill(domain_id, request.name)
         await db.commit()
         return SkillResponse.from_orm(skill)
     except HTTPException:
@@ -280,8 +278,8 @@ async def add_skill_to_candidate(
     Requirements: 3.2
     """
     try:
-        candidate_skill = await add_candidate_skill(
-            db,
+        service = SkillService(db)
+        candidate_skill = await service.add_candidate_skill(
             candidate_id,
             request.skill_id,
             request.proficiency_rank,

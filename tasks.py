@@ -607,101 +607,110 @@ def db_init_users(c):
 
 @task
 def db_init_test(c):
-    """Initialize test database with test users (no external volume)."""
+    """Initialize test database with test users in the same PostgreSQL instance."""
     print("🧪 Initializing test database...")
 
     try:
         # Get test database configuration from .env
         test_db_host = get_env_var("TEST_DATABASE_HOST", "localhost")
-        test_db_port = get_env_var("TEST_DATABASE_PORT", "5433")
+        test_db_port = get_env_var("TEST_DATABASE_PORT", "5432")
         test_db_name = get_env_var("TEST_DATABASE_NAME")
         test_db_user = get_env_var("TEST_DATABASE_USER")
         test_db_password = get_env_var("TEST_DATABASE_PASSWORD")
 
         # Get PostgreSQL admin credentials
         pg_admin_password = get_env_var("PG_ADMIN_PASSWORD")
-        pg_container_name = get_env_var("PG_CONTAINER_NAME", "local-postgresql-db")
-        pg_image = get_env_var("PG_IMAGE", "pgvector/pgvector:pg17")
 
-        # Start test PostgreSQL container (without volume mount)
-        print(f"🚀 Starting test PostgreSQL container on port {test_db_port}...")
-        container_cmd = (
-            f"docker run -d "
-            f"--name {pg_container_name}-test "
-            f"-e POSTGRES_PASSWORD={pg_admin_password} "
-            f"-e POSTGRES_DB={test_db_name} "
-            f"-p {test_db_port}:5432 "
-            f"{pg_image}"
+        print(f"📍 Using existing PostgreSQL instance")
+        print(f"   Host: {test_db_host}")
+        print(f"   Port: {test_db_port}")
+        print()
+
+        # Test connection to PostgreSQL
+        print("🔗 Testing connection to PostgreSQL...")
+        env = os.environ.copy()
+        env["PGPASSWORD"] = pg_admin_password
+
+        result = subprocess.run(
+            [
+                "psql",
+                "-h",
+                test_db_host,
+                "-p",
+                str(test_db_port),
+                "-U",
+                "postgres",
+                "-c",
+                "SELECT 1",
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
 
-        result = subprocess.run(container_cmd, shell=True, capture_output=True, text=True)
         if result.returncode != 0:
-            print(f"❌ Error starting test container: {result.stderr}")
+            print(f"❌ Error: Cannot connect to PostgreSQL")
+            print(f"   {result.stderr}")
+            print()
+            print("💡 Make sure PostgreSQL is running:")
+            print("   uv run invoke db-start")
             sys.exit(1)
 
-        container_id = result.stdout.strip()
-        print(f"✅ Test container started: {container_id[:12]}")
+        print("✅ Connected to PostgreSQL")
+        print()
 
-        # Wait for PostgreSQL to be ready
-        print("⏳ Waiting for PostgreSQL to be ready...")
-        import time
+        # Create test database if it doesn't exist
+        print(f"📦 Creating test database '{test_db_name}' if not exists...")
+        result = subprocess.run(
+            [
+                "psql",
+                "-h",
+                test_db_host,
+                "-p",
+                str(test_db_port),
+                "-U",
+                "postgres",
+                "-c",
+                f"CREATE DATABASE {test_db_name};",
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
 
-        max_attempts = 30
-        for attempt in range(max_attempts):
-            try:
-                env = os.environ.copy()
-                env["PGPASSWORD"] = pg_admin_password
-                result = subprocess.run(
-                    [
-                        "psql",
-                        "-h",
-                        test_db_host,
-                        "-p",
-                        str(test_db_port),
-                        "-U",
-                        "postgres",
-                        "-d",
-                        test_db_name,
-                        "-c",
-                        "SELECT 1",
-                    ],
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if result.returncode == 0:
-                    print("✅ PostgreSQL is ready")
-                    break
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                pass
+        # Ignore error if database already exists
+        if result.returncode != 0 and "already exists" not in result.stderr:
+            print(f"⚠️  Warning: {result.stderr.strip()}")
+        else:
+            print(f"✅ Test database ready")
 
-            if attempt < max_attempts - 1:
-                time.sleep(1)
-            else:
-                print("❌ PostgreSQL failed to start within timeout")
-                sys.exit(1)
+        print()
 
         # Create test database users and schemas
         print("👤 Creating test database users and schemas...")
 
         # Create test users and schemas
         sql_commands = f"""
-        -- Create test users
-        CREATE USER {test_db_user} WITH PASSWORD '{test_db_password}';
+        -- Create test user if not exists
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT FROM pg_user WHERE usename = '{test_db_user}') THEN
+                CREATE USER {test_db_user} WITH PASSWORD '{test_db_password}';
+            END IF;
+        END
+        $$;
         
         -- Grant connection privileges
         GRANT CONNECT ON DATABASE {test_db_name} TO {test_db_user};
         
-        -- Create test schema
-        CREATE SCHEMA talentkru_test AUTHORIZATION {test_db_user};
+        -- Create test schema if not exists
+        CREATE SCHEMA IF NOT EXISTS talentkru_test AUTHORIZATION {test_db_user};
         
         -- Set search path
         ALTER USER {test_db_user} SET search_path TO talentkru_test, public;
         """
-
-        env = os.environ.copy()
-        env["PGPASSWORD"] = pg_admin_password
 
         result = subprocess.run(
             [
@@ -728,6 +737,7 @@ def db_init_test(c):
             sys.exit(1)
 
         print("✅ Test database users and schemas created successfully!")
+        print()
 
         # Apply migrations to test database
         print("📦 Applying migrations to test database...")
@@ -751,6 +761,7 @@ def db_init_test(c):
         else:
             print("✅ Migrations applied successfully!")
 
+        print()
         print("✅ Test database initialization complete!")
         print(f"   Host: {test_db_host}")
         print(f"   Port: {test_db_port}")

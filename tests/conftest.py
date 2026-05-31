@@ -18,11 +18,6 @@ from app.modules.organizations.models import Organization
 # ---------------------------------------------------------------------------
 
 _REQUIRED_ENV = {
-    "DATABASE_HOST": "localhost",
-    "DATABASE_PORT": "5432",
-    "DATABASE_NAME": "talentkru_test",
-    "DATABASE_USER": "test_user",
-    "DATABASE_PASSWORD": "test_password",
     "JWT_SIGNING_KEY": "test-jwt-signing-key",
     "ENCRYPTION_KEY": "test-encryption-key",
     "STORAGE_BACKEND": "local",
@@ -31,7 +26,20 @@ _REQUIRED_ENV = {
     "METRICS_PASSWORD": "metrics_password",
 }
 
+# Set defaults for non-database variables
 for _key, _value in _REQUIRED_ENV.items():
+    os.environ.setdefault(_key, _value)
+
+# Use TEST_DATABASE_* variables from .env if available, otherwise use defaults
+_TEST_DB_DEFAULTS = {
+    "DATABASE_HOST": os.getenv("TEST_DATABASE_HOST", "localhost"),
+    "DATABASE_PORT": os.getenv("TEST_DATABASE_PORT", "5432"),
+    "DATABASE_NAME": os.getenv("TEST_DATABASE_NAME", "kru_test_db"),
+    "DATABASE_USER": os.getenv("TEST_DATABASE_USER", "kru_test"),
+    "DATABASE_PASSWORD": os.getenv("TEST_DATABASE_PASSWORD", "kruTest2026"),
+}
+
+for _key, _value in _TEST_DB_DEFAULTS.items():
     os.environ.setdefault(_key, _value)
 
 

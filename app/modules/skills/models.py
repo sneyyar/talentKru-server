@@ -34,9 +34,9 @@ from app.base_model import AuditMixin, Base
 class SkillSource(str, enum.Enum):
     """Source of skill data: manual entry, parsed from resume, or inferred."""
 
-    MANUAL = "manual"
-    PARSED = "parsed"
-    INFERRED = "inferred"
+    MANUAL = "MANUAL"
+    PARSED = "PARSED"
+    INFERRED = "INFERRED"
 
 
 class Domain(Base, AuditMixin):
@@ -100,9 +100,9 @@ class CandidateSkill(Base, AuditMixin):
     proficiency_rank = Column(Integer, nullable=False)
     years_of_experience = Column(Integer, nullable=False)
     source = Column(
-        SQLEnum(SkillSource, native_enum=True),
+        String(20),
         nullable=False,
-        default=SkillSource.MANUAL,
+        default=SkillSource.MANUAL.value,
     )  # type: ignore[var-annotated]
 
     # Relationships
@@ -119,6 +119,10 @@ class CandidateSkill(Base, AuditMixin):
         CheckConstraint(
             "years_of_experience >= 0 AND years_of_experience <= 50",
             name="ck_candidate_skills_years_of_experience",
+        ),
+        CheckConstraint(
+            "source IN ('MANUAL', 'PARSED', 'INFERRED')",
+            name="ck_candidate_skills_source",
         ),
     )
 

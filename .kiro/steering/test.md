@@ -4,16 +4,15 @@
 
 ## Overview
 
-TalentKru.ai uses **PostgreSQL** for all database and integration tests, not SQLite. Tests connect to a dedicated test database using environment variables defined in `.env`, ensuring consistency with production database behavior and supporting advanced features like pgvector for semantic search.
+TalentKru.ai uses **PostgreSQL** for all database and integration tests, not SQLite. Tests connect to a dedicated test database using environment variables from `.env`, ensuring consistency with production behavior and supporting advanced features like pgvector for semantic search.
 
 ## Test Database Configuration
 
 ### Environment Variables
 
-Tests use the following environment variables from `.env` for database connectivity:
+Tests use these environment variables from `.env`:
 
 ```zsh
-# Test database connection
 TEST_DATABASE_HOST=localhost
 TEST_DATABASE_PORT=5432
 TEST_DATABASE_NAME=kru_test_db
@@ -21,7 +20,7 @@ TEST_DATABASE_USER=kru_test
 TEST_DATABASE_PASSWORD=kruTest2026
 ```
 
-These variables are **separate** from production database variables (`DATABASE_*`), allowing you to run tests without affecting production data.
+These are **separate** from production variables (`DATABASE_*`), allowing tests to run without affecting production data. Both databases exist in the **same PostgreSQL instance** for simplicity.
 
 ### Why PostgreSQL for Tests?
 
@@ -33,11 +32,10 @@ These variables are **separate** from production database variables (`DATABASE_*
 
 ## Setting Up Test Database
 
-### Option 1: Using Invoke Tasks (Recommended)
+### Quick Setup (Recommended)
 
-#### Quick Setup
 ```zsh
-# 1. Start main PostgreSQL container
+# 1. Start PostgreSQL container (hosts both dev and test databases)
 uv run invoke db-start
 
 # 2. Initialize main database users
@@ -46,44 +44,44 @@ uv run invoke db-init-users
 # 3. Apply migrations to main database
 uv run invoke migrate
 
-# 4. Initialize test database (creates separate container)
+# 4. Initialize test database (creates test DB in same instance)
 uv run invoke db-init-test
 
 # 5. Run tests
 uv run invoke test
 ```
 
-#### What `db-init-test` Does
-- Starts a separate PostgreSQL container on port 5433 (configurable via `TEST_DATABASE_PORT`)
+The `db-init-test` task:
+- Connects to the existing PostgreSQL instance
 - Creates test database and test user
 - Applies all migrations to test database
-- Keeps test data isolated from production
+- Keeps test data isolated from production in separate database
 
-### Option 2: Manual Setup
+### Manual Setup
 
 If you prefer manual control:
 
 ```zsh
-# 1. Start PostgreSQL container
-docker run -d \
-  --name local-postgresql-test \
-  -e POSTGRES_PASSWORD=adminA11 \
-  -e POSTGRES_DB=kru_test_db \
-  -p 5433:5432 \
-  pgvector/pgvector:pg17
+# 1. Start PostgreSQL container (if not already running)
+uv run invoke db-start
 
-# 2. Wait for PostgreSQL to be ready
-sleep 5
+# 2. Create test database
+PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE kru_test_db;"
 
 # 3. Create test user and schema
-PGPASSWORD=adminA11 psql -h localhost -p 5433 -U postgres -d kru_test_db -c "
+PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d kru_test_db -c "
   CREATE USER kru_test WITH PASSWORD 'kruTest2026';
   GRANT CONNECT ON DATABASE kru_test_db TO kru_test;
   CREATE SCHEMA talentkru_test AUTHORIZATION kru_test;
   ALTER USER kru_test SET search_path TO talentkru_test, public;
 "
 
-# 4. Apply migrations
+# 4. Apply migrations to test database
+DATABASE_HOST=localhost \
+DATABASE_PORT=5432 \
+DATABASE_NAME=kru_test_db \
+DATABASE_USER=kru_test \
+DATABASE_PASSWORD=kruTest2026 \
 uv run alembic upgrade head
 
 # 5. Run tests
@@ -93,6 +91,7 @@ uv run invoke test
 ## Running Tests
 
 ### All Tests
+
 ```zsh
 # Run entire test suite
 uv run invoke test
@@ -108,6 +107,7 @@ uv run invoke test-watch
 ```
 
 ### Specific Tests
+
 ```zsh
 # Run specific test file
 uv run invoke test --path tests/test_auth_service.py
@@ -126,6 +126,7 @@ uv run pytest -m unit
 ```
 
 ### With Coverage
+
 ```zsh
 # Generate coverage report
 uv run invoke test-cov
@@ -138,6 +139,7 @@ uv run pytest --cov=app.modules.auth --cov-report=html tests/test_auth_service.p
 ```
 
 ### Watch Mode
+
 ```zsh
 # Re-run tests on file changes
 uv run invoke test-watch
@@ -169,26 +171,18 @@ This rollback mechanism ensures tests don't interfere with each other.
 
 ### Available Fixtures (conftest.py)
 
-#### Database Fixtures
 ```python
 @pytest.fixture
 async def db_session(async_session_factory):
     """Provides a database session for the test."""
     # Automatically rolls back after test
     yield session
-```
 
-#### Organization Fixtures
-```python
 @pytest.fixture
 async def org_id(db_session):
     """Creates a test organization and returns its ID."""
-    # Returns: UUID of test organization
     yield org_id
-```
 
-#### User Fixtures
-```python
 @pytest.fixture
 async def user_id(db_session, org_id):
     """Creates a test user and returns its ID."""
@@ -219,10 +213,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 @pytest.mark.asyncio
 async def test_create_candidate(db_session: AsyncSession, org_id):
     """Test candidate creation."""
-    # db_session: Database session for this test
-    # org_id: UUID of test organization
-    
-    # Your test code here
     candidate = Candidate(
         organization_id=org_id,
         first_name="John",
@@ -231,77 +221,8 @@ async def test_create_candidate(db_session: AsyncSession, org_id):
     db_session.add(candidate)
     await db_session.flush()
     
-    # Assertions
     assert candidate.candidate_id is not None
 ```
-
-## Test Organization
-
-### Directory Structure
-```
-tests/
-├── conftest.py                          # Shared fixtures
-├── integration_fixtures.py              # Integration test helpers
-│
-├── test_auth_service.py                 # Auth service tests
-├── test_auth_router.py                  # Auth router tests
-├── test_auth_properties.py              # Property-based auth tests
-│
-├── test_candidate_service.py            # Candidate service tests
-├── test_candidate_lifecycle_integration.py
-├── test_candidate_minimal.py
-│
-├── test_resume_ingestion_service.py     # Resume tests
-├── test_resume_models.py
-│
-├── test_skills_service.py               # Skills tests
-├── test_skill_matching_integration.py
-│
-├── test_user_service.py                 # User tests
-├── test_organizations.py
-│
-├── test_invitation_service.py           # Invitation tests
-├── test_password_reset_service.py
-│
-├── test_rbac_service.py                 # RBAC tests
-├── test_middleware_auth.py
-│
-├── test_privacy_service.py              # Privacy tests
-├── test_dsar_integration.py
-├── test_portal_dsar.py
-│
-├── test_job_posting_service.py          # Job posting tests
-├── test_job_posting_integration.py
-│
-├── test_requisition_integration.py      # Requisition tests
-├── test_scheduler_integration.py
-│
-├── test_domain_events_retry.py          # Event tests
-├── test_audit_log.py
-│
-├── test_rate_limiting.py                # Rate limiting tests
-├── test_rate_limit_middleware.py
-│
-├── test_health.py                       # Health check tests
-├── test_smoke.py                        # Smoke tests
-├── test_smoke_candidate_lifecycle.py
-│
-├── test_crypto.py                       # Crypto tests
-├── test_dependencies.py
-├── test_impersonate.py
-├── test_impersonate_router.py
-├── test_login_router.py
-│
-└── __pycache__/
-```
-
-### Test File Naming Conventions
-
-- `test_<module>_service.py`: Service layer unit tests
-- `test_<module>_router.py`: Route handler tests
-- `test_<module>_integration.py`: End-to-end integration tests
-- `test_<module>_properties.py`: Property-based tests (Hypothesis)
-- `test_<module>_models.py`: Model/schema tests
 
 ## Writing Tests
 
@@ -337,7 +258,6 @@ All tests must use `@pytest.mark.asyncio` decorator:
 @pytest.mark.asyncio
 async def test_async_operation(db_session: AsyncSession):
     """Test async database operation."""
-    # Use await for async calls
     result = await db_session.execute(select(User))
     users = result.scalars().all()
     assert len(users) >= 0
@@ -363,7 +283,6 @@ async def test_full_workflow(db_session: AsyncSession, org_id):
     # Extract skills
     skills = await skill_service.extract_skills(db_session, resume.resume_id)
     
-    # Verify
     assert len(skills) > 0
 ```
 
@@ -425,7 +344,6 @@ These defaults are overridden by `.env` values if present.
 To override test database settings, add to `.env`:
 
 ```zsh
-# Override test database settings
 TEST_DATABASE_HOST=localhost
 TEST_DATABASE_PORT=5433
 TEST_DATABASE_NAME=kru_test_db
@@ -438,17 +356,20 @@ TEST_DATABASE_PASSWORD=kruTest2026
 ### Test Database Connection Issues
 
 ```zsh
-# Check if test database is running
+# Check if PostgreSQL is running
 docker ps | grep postgresql
 
-# Test connection manually
-PGPASSWORD=kruTest2026 psql -h localhost -p 5433 -U kru_test -d kru_test_db -c "SELECT 1"
+# Test connection to main database
+PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d krudb -c "SELECT 1"
 
-# View test container logs
-docker logs local-postgresql-test
+# Test connection to test database
+PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d kru_test_db -c "SELECT 1"
 
-# Restart test database
-docker restart local-postgresql-test
+# View PostgreSQL container logs
+docker logs local-postgresql-db
+
+# Restart PostgreSQL container
+docker restart local-postgresql-db
 ```
 
 ### Tests Hanging or Timing Out
@@ -468,13 +389,22 @@ uv run pytest -v -s --pdb tests/test_file.py::test_function
 ### Database State Issues
 
 ```zsh
-# Clear test database and reinitialize
+# Reinitialize test database
 uv run invoke db-init-test
 
-# Or manually reset
-docker stop local-postgresql-test
-docker rm local-postgresql-test
-uv run invoke db-init-test
+# Or manually reset test database
+PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d kru_test_db -c "
+  DROP SCHEMA IF EXISTS talentkru_test CASCADE;
+  CREATE SCHEMA talentkru_test AUTHORIZATION kru_test;
+"
+
+# Then reapply migrations
+DATABASE_HOST=localhost \
+DATABASE_PORT=5432 \
+DATABASE_NAME=kru_test_db \
+DATABASE_USER=kru_test \
+DATABASE_PASSWORD=kruTest2026 \
+uv run alembic upgrade head
 ```
 
 ### Import Errors in Tests
@@ -551,7 +481,7 @@ jobs:
         image: pgvector/pgvector:pg17
         env:
           POSTGRES_PASSWORD: adminA11
-          POSTGRES_DB: kru_test_db
+          POSTGRES_DB: krudb
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -574,14 +504,46 @@ jobs:
       - name: Sync dependencies
         run: uv sync
       
+      - name: Initialize main database
+        run: |
+          PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d krudb -f database/create_user.sql
+      
+      - name: Apply migrations to main database
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_HOST: localhost
+          DATABASE_PORT: 5432
+          DATABASE_NAME: krudb
+          DATABASE_USER: talentkru_app
+          DATABASE_PASSWORD: kruApp2026
+      
+      - name: Initialize test database
+        run: |
+          PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE kru_test_db;"
+          PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d kru_test_db -c "
+            CREATE USER kru_test WITH PASSWORD 'kruTest2026';
+            GRANT CONNECT ON DATABASE kru_test_db TO kru_test;
+            CREATE SCHEMA talentkru_test AUTHORIZATION kru_test;
+            ALTER USER kru_test SET search_path TO talentkru_test, public;
+          "
+      
+      - name: Apply migrations to test database
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_HOST: localhost
+          DATABASE_PORT: 5432
+          DATABASE_NAME: kru_test_db
+          DATABASE_USER: kru_test
+          DATABASE_PASSWORD: kruTest2026
+      
       - name: Run tests
         run: uv run invoke test-cov
         env:
           TEST_DATABASE_HOST: localhost
           TEST_DATABASE_PORT: 5432
           TEST_DATABASE_NAME: kru_test_db
-          TEST_DATABASE_USER: postgres
-          TEST_DATABASE_PASSWORD: adminA11
+          TEST_DATABASE_USER: kru_test
+          TEST_DATABASE_PASSWORD: kruTest2026
 ```
 
 ## Best Practices
@@ -606,22 +568,14 @@ jobs:
 - Skip database tests for "speed"
 - Modify `.env` for test configuration (use environment variables)
 
-## References
-
-- [pytest Documentation](https://docs.pytest.org/)
-- [pytest-asyncio Documentation](https://pytest-asyncio.readthedocs.io/)
-- [SQLAlchemy Async Documentation](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
-- [Hypothesis Documentation](https://hypothesis.readthedocs.io/)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-
 ## Quick Reference
 
 ```zsh
 # Setup
-uv run invoke db-start              # Start main PostgreSQL
+uv run invoke db-start              # Start PostgreSQL (hosts both dev and test)
 uv run invoke db-init-users         # Initialize main database
-uv run invoke migrate               # Apply migrations
-uv run invoke db-init-test          # Setup test database
+uv run invoke migrate               # Apply migrations to main database
+uv run invoke db-init-test          # Setup test database in same instance
 
 # Run Tests
 uv run invoke test                  # Run all tests
@@ -632,6 +586,14 @@ uv run pytest -k "test_name"        # Pattern matching
 
 # Cleanup
 uv run invoke clean                 # Clean cache
-docker stop local-postgresql-test   # Stop test container
-docker rm local-postgresql-test     # Remove test container
+docker stop local-postgresql-db     # Stop PostgreSQL container
+docker rm local-postgresql-db       # Remove PostgreSQL container
 ```
+
+## References
+
+- [pytest Documentation](https://docs.pytest.org/)
+- [pytest-asyncio Documentation](https://pytest-asyncio.readthedocs.io/)
+- [SQLAlchemy Async Documentation](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
+- [Hypothesis Documentation](https://hypothesis.readthedocs.io/)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)

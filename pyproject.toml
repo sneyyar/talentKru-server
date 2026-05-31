@@ -1,3 +1,11 @@
+[project]
+name = "talentkru-server"
+version = "0.1.0"
+description = "TalentKru.ai FastAPI backend"
+readme = "README.md"
+authors = [{name = "TalentKru Team", email = "team@talentkru.ai"}]
+requires-python = ">=3.12.13"
+
 [tool.poetry]
 name = "talentkru-server"
 version = "0.1.0"
