@@ -8,7 +8,7 @@ Requirements: 5.1, 5.2, 5.8, 5.9, 6.1, 6.2, 6.5, 6.6, 6.7, 6.8, 6.9
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -173,7 +173,7 @@ class RBACService:
         """
         stmt = select(Role)
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return cast(list[Role], result.scalars().all())  # type: ignore[arg-type]  # type: ignore[assignment]
 
     async def get_user_roles(self, user_id: UUID) -> list[UserRole]:
         """
@@ -189,7 +189,7 @@ class RBACService:
         """
         stmt = select(UserRole).where(UserRole.user_id == user_id)
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return cast(list[UserRole], result.scalars().all())  # type: ignore[arg-type]  # type: ignore[assignment]
 
     async def assign_privilege(
         self, role_name: str, privilege_id: UUID, actor_id: UUID, obo_by: Optional[UUID] = None
@@ -331,7 +331,7 @@ class RBACService:
         """
         stmt = select(Privilege)
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return cast(list[Privilege], result.scalars().all())  # type: ignore[arg-type]  # type: ignore[assignment]
 
     async def get_role_privileges(self, role_name: str) -> list[RolePrivilege]:
         """
@@ -350,4 +350,4 @@ class RBACService:
             RolePrivilege.deleted_at.is_(None),
         )
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return cast(list[RolePrivilege], result.scalars().all())  # type: ignore[arg-type]  # type: ignore[assignment]

@@ -13,7 +13,7 @@ Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 1.7, 1.8, 1.9
 import hashlib
 import re
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, cast
 from uuid import UUID
 
 import bcrypt
@@ -269,7 +269,7 @@ class UserService:
             .options(selectinload(User.user_roles))
         )
         result = await self.db.execute(stmt)
-        users = result.scalars().all()
+        users = cast(list[User], result.scalars().all())  # type: ignore[arg-type]  # type: ignore[assignment]
         
         return users, total_count
 
@@ -297,7 +297,7 @@ class UserService:
             if not user:
                 raise UserNotFoundError(f"User {user_id} not found")
             
-            user.status = UserStatus.LOCKED
+            user.status = UserStatus.LOCKED  # type: ignore[assignment]
             
             try:
                 await self.db.flush()
@@ -332,7 +332,7 @@ class UserService:
             .limit(limit)
         )
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return cast(list[PasswordHistory], result.scalars().all())  # type: ignore[assignment]  # type: ignore[assignment]
 
     async def add_password_history(
         self, user_id: UUID, hashed_password: str

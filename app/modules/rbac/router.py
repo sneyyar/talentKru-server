@@ -77,7 +77,7 @@ async def assign_role(
             user_id,
             role_name,
             principal.user_id,
-            obo_by=principal.obo_by if hasattr(principal, 'obo_by') else None,
+            obo_by=UUID(principal.obo_by) if principal.obo_by else None,
         )
         await db.commit()
     except ValueError as e:
@@ -111,7 +111,7 @@ async def remove_role(
             user_id,
             role_name,
             principal.user_id,
-            obo_by=principal.obo_by if hasattr(principal, 'obo_by') else None,
+            obo_by=UUID(principal.obo_by) if principal.obo_by else None,
         )
         await db.commit()
     except ValueError as e:
@@ -188,7 +188,7 @@ async def assign_privilege(
             role_name,
             request.privilege_id,
             principal.user_id,
-            obo_by=principal.obo_by if hasattr(principal, 'obo_by') else None,
+            obo_by=UUID(principal.obo_by) if principal.obo_by else None,
         )
         await db.commit()
     except ValueError as e:
@@ -222,7 +222,7 @@ async def remove_privilege(
             role_name,
             privilege_id,
             principal.user_id,
-            obo_by=principal.obo_by if hasattr(principal, 'obo_by') else None,
+            obo_by=UUID(principal.obo_by) if principal.obo_by else None,
         )
         await db.commit()
     except ValueError as e:

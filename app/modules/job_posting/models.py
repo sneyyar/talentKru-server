@@ -60,7 +60,7 @@ class JobPosting(Base, AuditMixin, VersionMixin):
     description = Column(Text, nullable=False)
     
     # Work locations: array of location strings
-    work_locations = Column(ARRAY(String), nullable=False, server_default="{}")
+    work_locations = Column(ARRAY(String), nullable=False, server_default="{}")  # type: ignore[var-annotated]
     
     # Salary range: numeric with 2 decimal places (12,2 precision)
     salary_min = Column(Numeric(12, 2), nullable=True)

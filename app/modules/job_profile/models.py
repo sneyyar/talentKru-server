@@ -93,7 +93,7 @@ class JobProfileSkill(Base, AuditMixin):
         SQLEnum(SkillDesignation, native_enum=True),
         nullable=False,
         default=SkillDesignation.REQUIRED,
-    )
+    )  # type: ignore[var-annotated]
     
     # Required proficiency rank: 1-5
     required_proficiency_rank = Column(Integer, nullable=False)

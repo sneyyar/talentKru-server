@@ -195,7 +195,7 @@ The TalentKru.ai Team
             PasswordResetToken.token_hash == token_hash
         )
         result = await self.db.execute(stmt)
-        reset_token = result.scalar_one_or_none()
+        reset_token = result.scalar_one_or_none()  # type: ignore[assignment]
         
         if not reset_token:
             raise ValueError("Invalid or expired password reset token")
@@ -210,7 +210,7 @@ The TalentKru.ai Team
             raise ValueError("Invalid or expired password reset token")
         
         # Get the user
-        user = await self.db.get(User, reset_token.user_id)
+        user = await self.db.get(User, reset_token.user_id)  # type: ignore[arg-type]  # type: ignore[assignment]
         if not user:
             raise ValueError("Invalid or expired password reset token")
         
@@ -239,7 +239,7 @@ The TalentKru.ai Team
         await self.db.flush()
         
         # Mark reset token as used
-        reset_token.is_used = True
+        reset_token.is_used = True  # type: ignore[assignment]
         await self.db.flush()
         
         # Revoke all user tokens

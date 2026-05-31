@@ -84,7 +84,7 @@ class Candidate(Base, AuditMixin, VersionMixin):
         SQLEnum(GlobalStatus, native_enum=True),
         nullable=False,
         default=GlobalStatus.Active,
-    )
+    )  # type: ignore[var-annotated]
 
     # Ineligibility reason: required when status is set to Ineligible
     ineligibility_reason = Column(String(1000), nullable=True)

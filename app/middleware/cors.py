@@ -193,10 +193,12 @@ async def _fetch_allowed_origins_from_db(org_id: UUID) -> list[str]:
     from app.modules.organizations.models import Organization
 
     async with AsyncSessionFactory() as db:
-        stmt = select(Organization.allowed_origins).where(
+        stmt = select(Organization).where(
             Organization.organization_id == org_id,
             Organization.deleted_at.is_(None),
         )
         result = await db.execute(stmt)
-        row = result.scalar_one_or_none()
-        return list(row) if row else []
+        org = result.scalar_one_or_none()
+        if org and org.allowed_origins:
+            return list(org.allowed_origins)
+        return []

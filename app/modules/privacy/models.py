@@ -29,8 +29,8 @@ class DataSubjectAccessRequest(Base, AuditMixin):
     dsar_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     candidate_id = Column(UUID(as_uuid=True), nullable=False)
     organization_id = Column(UUID(as_uuid=True), nullable=False)
-    request_type = Column(SQLEnum(DSARRequestType, native_enum=True), nullable=False)
-    status = Column(SQLEnum(DSARStatus, native_enum=True), nullable=False, default=DSARStatus.Pending)
+    request_type = Column(SQLEnum(DSARRequestType, native_enum=True), nullable=False)  # type: ignore[var-annotated]
+    status = Column(SQLEnum(DSARStatus, native_enum=True), nullable=False, default=DSARStatus.Pending)  # type: ignore[var-annotated]
     requested_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     denial_reason = Column(String(1000), nullable=True)

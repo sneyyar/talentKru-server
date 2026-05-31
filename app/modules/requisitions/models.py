@@ -37,7 +37,7 @@ class JobRequisition(Base, AuditMixin, VersionMixin):
     department = Column(String(100), nullable=False)
     location = Column(String(200), nullable=False)
     hiring_manager_user_id = Column(UUID(as_uuid=True), nullable=False)
-    status = Column(SQLEnum(RequisitionStatus, native_enum=True), nullable=False, default=RequisitionStatus.Open)
+    status = Column(SQLEnum(RequisitionStatus, native_enum=True), nullable=False, default=RequisitionStatus.Open)  # type: ignore[var-annotated]
     description = Column(String(5000), nullable=True)
 
 

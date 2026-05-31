@@ -94,7 +94,7 @@ async def create_user(
             manager_user_id=request.manager_user_id,
             locale=request.locale or "en-US",
             actor_id=principal.user_id,
-            obo_by=principal.obo_by if hasattr(principal, 'obo_by') else None,
+            obo_by=UUID(principal.obo_by) if principal.obo_by else None,
         )
         await db.commit()
         return UserResponse.from_orm(user)
@@ -139,7 +139,7 @@ async def update_user(
             locale=request.locale,
             manager_user_id=request.manager_user_id,
             actor_id=principal.user_id,
-            obo_by=principal.obo_by if hasattr(principal, 'obo_by') else None,
+            obo_by=UUID(principal.obo_by) if principal.obo_by else None,
         )
         await db.commit()
         return UserResponse.from_orm(user)

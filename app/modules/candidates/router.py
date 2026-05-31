@@ -152,7 +152,7 @@ async def list_candidates(
             parsed_status = GlobalStatus(status)
         except ValueError:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_400_BAD_REQUEST,  # type: ignore[attr-defined]
                 detail=f"Invalid status: {status}. Must be one of: Active, Interviewing, Expired, Ineligible, Deleted",
             )
 

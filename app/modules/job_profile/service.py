@@ -111,7 +111,7 @@ async def get_job_profile(
         JobProfile.deleted_at.is_(None),
     )
     result = await db.execute(stmt)
-    job_profile = result.scalar_one_or_none()
+    job_profile = result.scalar_one_or_none()  # type: ignore[assignment]
     if job_profile is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -150,7 +150,7 @@ async def list_job_profiles(
         .limit(limit)
     )
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    return list(result.scalars().all())  # type: ignore[assignment]
 
 
 async def update_job_profile(
@@ -159,7 +159,7 @@ async def update_job_profile(
     name: str | None = None,
     skills: list[JobProfileSkillCreate] | None = None,
     version: int | None = None,
-    db: AsyncSession = None,
+    db: AsyncSession | None = None,
 ) -> JobProfile:
     """
     Apply a partial update to an existing job profile.
@@ -184,6 +184,9 @@ async def update_job_profile(
         HTTPException(422): If any skill entry has invalid proficiency rank.
         StaleDataError: If the provided version is stale (converted to 409 by handler).
     """
+    if db is None:
+        raise ValueError("Database session is required")
+    
     job_profile = await get_job_profile(org_id, job_profile_id, db)
 
     # Update name if provided

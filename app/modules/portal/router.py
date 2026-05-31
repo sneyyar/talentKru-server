@@ -54,7 +54,7 @@ async def create_dsar(
         candidate_id=principal.user_id,
         org_id=principal.organization_id,
         request_type=request.request_type,
-    )
+    )  # type: ignore[arg-type]
     
     await db.commit()
     
@@ -63,7 +63,7 @@ async def create_dsar(
         dsar_id=str(dsar.dsar_id),
         candidate_id=str(principal.user_id),
         organization_id=str(principal.organization_id),
-    )
+    )  # type: ignore[arg-type]
     
     return DSARResponse(
         dsar_id=dsar.dsar_id,

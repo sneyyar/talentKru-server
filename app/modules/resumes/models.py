@@ -50,7 +50,7 @@ class Resume(Base, AuditMixin, VersionMixin):
     file_size_bytes = Column(Integer, nullable=False)
     uploaded_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     is_primary = Column(Boolean, nullable=False, default=False)
-    parse_status = Column(SQLEnum(ParseStatus, native_enum=True), nullable=False, default=ParseStatus.Pending)
+    parse_status = Column(SQLEnum(ParseStatus, native_enum=True), nullable=False, default=ParseStatus.Pending)  # type: ignore[var-annotated]
     parsed_data = Column(JSONB, nullable=True)
 
     # Partial index on candidate_id where deleted_at IS NULL

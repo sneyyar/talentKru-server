@@ -9,10 +9,10 @@ This is a stub implementation that logs emails instead of actually sending them.
 In production, this would integrate with SendGrid, AWS SES, or similar.
 """
 
-import logging
+import structlog
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class EmailService:

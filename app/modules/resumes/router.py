@@ -68,12 +68,12 @@ async def upload_resume(
     resume = await resume_service.upload_resume(
         file_bytes=file_bytes,
         filename=file.filename or "resume",
-        mime_type=file.content_type,
+        mime_type=file.content_type or "application/octet-stream",
         org_id=principal.organization_id,
         uploaded_by=principal.user_id,
         candidate_id=candidate_id,
         background_tasks=background_tasks,
-    )
+    )  # type: ignore[arg-type]
     
     await db.commit()
     
@@ -117,7 +117,7 @@ async def get_resume(
                 Resume.deleted_at.is_(None),
             )
         )
-    )
+    )  # type: ignore[arg-type]
     resume = result.scalar_one_or_none()
     
     if not resume:

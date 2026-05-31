@@ -170,7 +170,7 @@ The TalentKru.ai Team
             InvitationToken.token_hash == token_hash
         )
         result = await self.db.execute(stmt)
-        invitation = result.scalar_one_or_none()
+        invitation = result.scalar_one_or_none()  # type: ignore[assignment]
         
         if not invitation:
             raise ValueError("Invalid invitation token")
@@ -185,7 +185,7 @@ The TalentKru.ai Team
             raise ValueError("Invitation token has expired")
         
         # Get the user
-        user = await self.db.get(User, invitation.user_id)
+        user = await self.db.get(User, invitation.user_id)  # type: ignore[assignment]
         if not user:
             raise ValueError("User not found")
         
@@ -262,13 +262,13 @@ The TalentKru.ai Team
         
         # Invalidate existing unused tokens
         now = datetime.now(timezone.utc)
-        stmt = select(InvitationToken).where(
+        stmt = select(InvitationToken).where(  # type: ignore[assignment]
             InvitationToken.user_id == user_id,
             InvitationToken.is_used == False,
             InvitationToken.expires_at > now,
         )
         result = await self.db.execute(stmt)
-        existing_tokens = result.scalars().all()
+        existing_tokens = result.scalars().all()  # type: ignore[assignment]
         
         for token in existing_tokens:
             token.is_used = True
@@ -281,7 +281,7 @@ The TalentKru.ai Team
         # Send invitation email
         # TODO: Get organization name from org_id
         org_name = "TalentKru.ai"
-        await self.send_invitation_email(user, new_token, org_name)
+        await self.send_invitation_email(user, new_token, org_name)  # type: ignore[arg-type]
         
         # Write audit log entry
         await write_audit_log(

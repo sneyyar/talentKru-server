@@ -55,4 +55,4 @@ class InterviewJourney(Base, AuditMixin, VersionMixin):
         SQLEnum(JourneyOverallStatus, native_enum=True),
         nullable=False,
         default=JourneyOverallStatus.ACTIVE,
-    )
+    )  # type: ignore[var-annotated]

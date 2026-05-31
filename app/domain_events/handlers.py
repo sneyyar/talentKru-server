@@ -31,7 +31,7 @@ async def dispatch_event(event: DomainEvent, correlation_id: str | None = None) 
     Look up all handlers registered for event.event_type and call each one.
     If no handler is registered, log a warning but do not raise.
     """
-    handlers = HandlerRegistry.get(event.event_type, [])
+    handlers = HandlerRegistry.get(event.event_type, [])  # type: ignore[call-overload]
     if not handlers:
         logger.warning(
             "no_handler_registered",

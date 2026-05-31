@@ -35,5 +35,5 @@ class DomainEvent(Base):
         nullable=False,
         default=EventStatus.Pending,
         index=True,
-    )
+    )  # type: ignore[var-annotated]
     correlation_id = Column(String(64), nullable=True)

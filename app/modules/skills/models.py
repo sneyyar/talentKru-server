@@ -103,7 +103,7 @@ class CandidateSkill(Base, AuditMixin):
         SQLEnum(SkillSource, native_enum=True),
         nullable=False,
         default=SkillSource.MANUAL,
-    )
+    )  # type: ignore[var-annotated]
 
     # Relationships
     skill = relationship("Skill", back_populates="candidate_skills")

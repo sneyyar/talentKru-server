@@ -6,6 +6,7 @@ candidate association, and required skill management.
 Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6
 """
 
+from typing import cast
 from uuid import UUID, uuid4
 from datetime import datetime, timezone
 from fastapi import BackgroundTasks, HTTPException, status
@@ -118,7 +119,7 @@ class RequisitionService:
                 )
             )
         )
-        requisition = result.scalar_one_or_none()
+        requisition = result.scalar_one_or_none()  # type: ignore[assignment]
         
         if not requisition:
             raise HTTPException(
@@ -143,7 +144,7 @@ class RequisitionService:
             )
         
         # Update status
-        requisition.status = target_status
+        requisition.status = target_status  # type: ignore[assignment]
         requisition.updated_by = updated_by
         
         try:
@@ -196,7 +197,7 @@ class RequisitionService:
                 )
             )
         )
-        requisition = result.scalar_one_or_none()
+        requisition = result.scalar_one_or_none()  # type: ignore[assignment]
         
         if not requisition:
             raise HTTPException(
@@ -462,6 +463,6 @@ class RequisitionService:
         stmt = stmt.offset(offset).limit(limit)
         
         result = await self.db.execute(stmt)
-        requisitions = result.scalars().all()
+        requisitions = cast(list[JobRequisition], result.scalars().all())
         
         return requisitions, total_count

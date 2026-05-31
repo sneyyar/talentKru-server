@@ -52,14 +52,16 @@ class AuthExtractionMiddleware(BaseHTTPMiddleware):
                     
                     # Fetch the organization's rate limit from the database
                     try:
-                        async with get_db_session() as db:
+                        db = get_db_session()
+                        async for session in db:  # type: ignore[misc]
                             stmt = select(Organization).where(
                                 Organization.organization_id == org_id_str
                             )
-                            result = await db.execute(stmt)
+                            result = await session.execute(stmt)
                             org = result.scalar_one_or_none()
                             if org:
                                 request.state.org_rate_limit = org.rate_limit_per_minute
+                            break
                     except Exception:
                         # If we can't fetch the org, use default
                         request.state.org_rate_limit = 1000

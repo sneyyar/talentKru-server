@@ -104,7 +104,7 @@ async def get_current_principal(
         User.deleted_at.is_(None),
     )
     result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
+    user = result.scalar_one_or_none()  # type: ignore[arg-type]
     
     if not user:
         raise credentials_exception

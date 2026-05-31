@@ -65,7 +65,7 @@ async def list_dsars(
     
     dsars, total_count = await service.list_dsars(
         org_id=principal.organization_id,
-        status=status,
+        status_filter=status,
         page=page,
         page_size=page_size,
     )

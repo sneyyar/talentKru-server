@@ -77,13 +77,20 @@ async def _dispatch_with_status_update(
     Requirements: 3.4, 3.5
     """
     async with AsyncSessionFactory() as db:
-        event = await db.get(DomainEvent, event_id)
+        event = await db.get(DomainEvent, event_id)  # type: ignore[arg-type]
+        if not event:
+            logger.error(
+                "domain_event_not_found",
+                event_id=str(event_id),
+                correlation_id=correlation_id,
+            )
+            return
         try:
             await dispatch_event(event, correlation_id)
             event.status = EventStatus.Processed
             event.processed_at = datetime.now(timezone.utc)
         except Exception as exc:
-            event.status = EventStatus.Failed
+            event.status = EventStatus.Failed  # type: ignore[assignment]
             logger.error(
                 "domain_event_handler_failed",
                 event_id=str(event_id),

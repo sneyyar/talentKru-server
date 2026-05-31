@@ -62,7 +62,7 @@ class User(Base, AuditMixin, VersionMixin):
         SQLEnum(UserStatus, native_enum=True),
         nullable=False,
         default=UserStatus.PENDING_INVITATION,
-    )
+    )  # type: ignore[var-annotated]
 
     # Manager relationship for organizational hierarchy
     manager_user_id = Column(

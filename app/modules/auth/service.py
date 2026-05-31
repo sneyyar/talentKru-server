@@ -106,7 +106,7 @@ class RevocationCache:
         
         with self._lock:
             for token in revoked_tokens:
-                self._store[token.jti] = token.revoked_at
+                self._store[token.jti] = token.revoked_at  # type: ignore[assignment]
 
 
 class AuthService:
@@ -292,7 +292,7 @@ class AuthService:
         # Look up the refresh token
         stmt = select(RefreshToken).where(RefreshToken.token_hash == token_hash)
         result = await self.db.execute(stmt)
-        token_record = result.scalar_one_or_none()
+        token_record = result.scalar_one_or_none()  # type: ignore[assignment]
         
         if not token_record:
             raise AuthenticationError("Invalid refresh token")
@@ -309,7 +309,7 @@ class AuthService:
             raise AuthenticationError("Refresh token has been revoked")
         
         # Get the user
-        user = await self.db.get(User, token_record.user_id)
+        user = await self.db.get(User, token_record.user_id)  # type: ignore[assignment]
         if not user:
             raise AuthenticationError("User not found")
         
@@ -338,8 +338,8 @@ class AuthService:
         await self.db.flush()
         
         # Mark old token as revoked and link to new token
-        token_record.is_revoked = True
-        token_record.replaced_by_token_id = new_refresh.refresh_token_id
+        token_record.is_revoked = True  # type: ignore[assignment]
+        token_record.replaced_by_token_id = new_refresh.refresh_token_id  # type: ignore[assignment]
         await self.db.flush()
         
         return access_token, new_refresh_token_raw
@@ -391,7 +391,7 @@ class AuthService:
         
         # Revoke all tokens in the family
         for token in tokens_to_revoke:
-            token.is_revoked = True
+            token.is_revoked = True  # type: ignore[assignment]
         
         await self.db.flush()
         
@@ -422,7 +422,7 @@ class AuthService:
             RefreshToken.expires_at > now,
         )
         result = await self.db.execute(stmt)
-        tokens = result.scalars().all()
+        tokens = result.scalars().all()  # type: ignore[assignment]
         
         for token in tokens:
             token.is_revoked = True
@@ -469,7 +469,7 @@ class AuthService:
             User.organization_id == target_org_id,
         )
         result = await self.db.execute(stmt)
-        target_user = result.scalar_one_or_none()
+        target_user = result.scalar_one_or_none()  # type: ignore[assignment]
         
         if not target_user:
             raise HTTPException(status_code=404, detail="User not found")

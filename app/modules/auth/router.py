@@ -110,7 +110,7 @@ async def login(
     # Find the user by email_hash (searches across all orgs)
     stmt = select(User).where(User.email_hash == email_hash)
     result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
+    user = result.scalar_one_or_none()  # type: ignore[arg-type]
     
     if not user:
         # User not found - return 401 without disclosing whether email exists
