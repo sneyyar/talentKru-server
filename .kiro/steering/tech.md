@@ -264,6 +264,113 @@ talentkru-server/
 └── .env.example          # Environment template
 ```
 
+## Enum-Based Columns Pattern
+
+### Overview
+
+When creating features with enumerated values (status fields, types, designations, etc.), use a simple, database-agnostic approach:
+
+1. **Define enum in Python** with UPPERCASE names and values
+2. **Store as VARCHAR in database** (no PostgreSQL enum types)
+3. **Add check constraints** for database-level validation
+4. **Pass `.value` property** when creating model instances
+
+### Why This Approach?
+
+- **No type registry caching issues** - Avoids SQLAlchemy enum type conflicts
+- **Database portability** - Works across all databases (PostgreSQL, MySQL, SQLite, etc.)
+- **Simple and explicit** - Easy to understand and maintain
+- **Type-safe in Python** - Full IDE support and type checking
+- **Database validation** - Check constraints ensure data integrity
+
+### Implementation Pattern
+
+#### 1. Define Enum (Python)
+
+```python
+import enum
+
+class MyStatus(str, enum.Enum):
+    """Status enumeration."""
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    PENDING = "PENDING"
+```
+
+#### 2. Model Column (SQLAlchemy)
+
+```python
+from sqlalchemy import Column, String, CheckConstraint
+
+class MyEntity(Base, AuditMixin):
+    __tablename__ = "my_entities"
+    
+    status = Column(
+        String(20),
+        nullable=False,
+        default=MyStatus.ACTIVE.value,
+    )  # type: ignore[var-annotated]
+    
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('ACTIVE', 'INACTIVE', 'PENDING')",
+            name="ck_my_entities_status",
+        ),
+    )
+```
+
+#### 3. Migration (Alembic)
+
+```python
+def upgrade() -> None:
+    op.create_table(
+        'my_entities',
+        sa.Column('status', sa.String(20), nullable=False, server_default='ACTIVE'),
+        # ... other columns ...
+        sa.CheckConstraint(
+            "status IN ('ACTIVE', 'INACTIVE', 'PENDING')",
+            name='ck_my_entities_status',
+        ),
+    )
+```
+
+#### 4. Service Layer Usage
+
+```python
+class MyService:
+    async def create_entity(self, ...):
+        entity = MyEntity(
+            status=MyStatus.ACTIVE.value,  # Pass .value property
+            # ... other fields ...
+        )
+        self.db.add(entity)
+        await self.db.flush()
+        return entity
+```
+
+### Enum Naming Convention
+
+- **Enum class name**: PascalCase (e.g., `GlobalStatus`, `ParseStatus`)
+- **Enum member names**: UPPERCASE (e.g., `ACTIVE`, `PENDING`, `COMPLETED`)
+- **Enum values**: UPPERCASE (e.g., `"ACTIVE"`, `"PENDING"`, `"COMPLETED"`)
+- **Column type**: Always `String(20)` (adjust length as needed)
+- **Check constraint name**: `ck_<table>_<column>` (e.g., `ck_candidates_global_status`)
+
+### Common Enums in TalentKru
+
+| Enum | Values | Table | Column |
+|------|--------|-------|--------|
+| GlobalStatus | ACTIVE, INTERVIEWING, EXPIRED, INELIGIBLE, DELETED | candidates | global_status |
+| ParseStatus | PENDING, COMPLETED, FAILED | resumes | parse_status |
+| UserStatus | ACTIVE, INACTIVE, LOCKED, PENDING_INVITATION | users | status |
+| SkillDesignation | REQUIRED, DESIRED | job_profile_skills | designation |
+| RequisitionStatus | OPEN, ON_HOLD, CLOSED, CANCELLED | job_requisitions | status |
+| DSARRequestType | ACCESS, ERASURE | data_subject_access_requests | request_type |
+| DSARStatus | PENDING, PROCESSING, COMPLETED, DENIED | data_subject_access_requests | status |
+| EventStatus | PENDING, PROCESSED, FAILED | domain_events | status |
+| SkillSource | MANUAL, PARSED, INFERRED | candidate_skills | source |
+| JourneyOverallStatus | ACTIVE, ON_HOLD, COMPLETED, CANCELLED | interview_journeys | overall_status |
+
 ## Code Style & Standards
 
 ### Formatting

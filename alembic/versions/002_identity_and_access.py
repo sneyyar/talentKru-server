@@ -54,7 +54,7 @@ def upgrade() -> None:
             "status",
             sa.String(20),
             nullable=False,
-            server_default="PendingInvitation",
+            server_default="PENDING_INVITATION",
         ),
         sa.Column(
             "manager_user_id",
@@ -97,6 +97,10 @@ def upgrade() -> None:
             "organization_id",
             "email_hash",
             name="uq_users_org_email",
+        ),
+        sa.CheckConstraint(
+            "status IN ('ACTIVE', 'INACTIVE', 'LOCKED', 'PENDING_INVITATION')",
+            name="ck_users_status",
         ),
     )
     op.create_index("idx_users_org_id", "users", ["organization_id"])

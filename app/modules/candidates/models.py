@@ -16,7 +16,7 @@ import uuid
 
 from sqlalchemy import (
     Column,
-    Enum as SQLEnum,
+    CheckConstraint,
     ForeignKey,
     Index,
     String,
@@ -33,11 +33,11 @@ class GlobalStatus(str, enum.Enum):
     Requirement 1.1: GlobalStatus values for candidate lifecycle tracking.
     """
 
-    Active = "Active"
-    Interviewing = "Interviewing"
-    Expired = "Expired"
-    Ineligible = "Ineligible"
-    Deleted = "Deleted"
+    ACTIVE = "ACTIVE"
+    INTERVIEWING = "INTERVIEWING"
+    EXPIRED = "EXPIRED"
+    INELIGIBLE = "INELIGIBLE"
+    DELETED = "DELETED"
 
 
 class Candidate(Base, AuditMixin, VersionMixin):
@@ -81,9 +81,9 @@ class Candidate(Base, AuditMixin, VersionMixin):
 
     # Global status for lifecycle tracking
     global_status = Column(
-        SQLEnum(GlobalStatus, native_enum=True),
+        String(20),
         nullable=False,
-        default=GlobalStatus.Active,
+        default=GlobalStatus.ACTIVE.value,
     )  # type: ignore[var-annotated]
 
     # Ineligibility reason: required when status is set to Ineligible
@@ -93,6 +93,11 @@ class Candidate(Base, AuditMixin, VersionMixin):
         # Unique constraint: email_hash per organization
         UniqueConstraint(
             "organization_id", "email_hash", name="uq_candidates_org_email"
+        ),
+        # Check constraint: valid global_status values
+        CheckConstraint(
+            "global_status IN ('ACTIVE', 'INTERVIEWING', 'EXPIRED', 'INELIGIBLE', 'DELETED')",
+            name="ck_candidates_global_status",
         ),
         # Partial index: candidates by organization and status (excluding soft-deleted)
         Index(

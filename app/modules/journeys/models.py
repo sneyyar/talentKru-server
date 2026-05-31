@@ -8,7 +8,7 @@ Inherits Base, AuditMixin, and VersionMixin to satisfy Requirements 7.1 and 7.5
 import enum
 import uuid
 
-from sqlalchemy import Column, Enum as SQLEnum, ForeignKey
+from sqlalchemy import Column, CheckConstraint, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.base_model import AuditMixin, Base, VersionMixin
@@ -17,10 +17,10 @@ from app.base_model import AuditMixin, Base, VersionMixin
 class JourneyOverallStatus(str, enum.Enum):
     """Overall status of an interview journey."""
 
-    ACTIVE = "Active"
-    ON_HOLD = "OnHold"
-    COMPLETED = "Completed"
-    CANCELLED = "Cancelled"
+    ACTIVE = "ACTIVE"
+    ON_HOLD = "ON_HOLD"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 
 class InterviewJourney(Base, AuditMixin, VersionMixin):
@@ -52,7 +52,14 @@ class InterviewJourney(Base, AuditMixin, VersionMixin):
 
     # Overall status for expiry check
     overall_status = Column(
-        SQLEnum(JourneyOverallStatus, native_enum=True),
+        String(20),
         nullable=False,
-        default=JourneyOverallStatus.ACTIVE,
+        default=JourneyOverallStatus.ACTIVE.value,
     )  # type: ignore[var-annotated]
+
+    __table_args__ = (
+        CheckConstraint(
+            "overall_status IN ('ACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED')",
+            name="ck_interview_journeys_overall_status",
+        ),
+    )

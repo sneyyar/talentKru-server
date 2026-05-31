@@ -18,16 +18,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create EventStatus enum for domain_events table
+    # Add check constraint for domain_events status column
     op.execute("""
-        CREATE TYPE eventstatus AS ENUM (
-            'Pending',
-            'Processed',
-            'Failed'
-        )
+        ALTER TABLE domain_events
+        ADD CONSTRAINT ck_domain_events_status
+        CHECK (status IN ('PENDING', 'PROCESSED', 'FAILED'))
     """)
 
 
 def downgrade() -> None:
-    # Drop EventStatus enum
-    op.execute("DROP TYPE IF EXISTS eventstatus")
+    # Drop check constraint
+    op.execute("ALTER TABLE domain_events DROP CONSTRAINT ck_domain_events_status")

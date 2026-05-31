@@ -10,8 +10,8 @@ import uuid
 
 from sqlalchemy import (
     Column,
+    CheckConstraint,
     DateTime,
-    Enum as SQLEnum,
     ForeignKey,
     Integer,
     String,
@@ -27,10 +27,10 @@ from app.base_model import AuditMixin, Base, VersionMixin
 class UserStatus(str, enum.Enum):
     """User account status enumeration."""
 
-    ACTIVE = "Active"
-    INACTIVE = "Inactive"
-    LOCKED = "Locked"
-    PENDING_INVITATION = "PendingInvitation"
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    LOCKED = "LOCKED"
+    PENDING_INVITATION = "PENDING_INVITATION"
 
 
 class User(Base, AuditMixin, VersionMixin):
@@ -59,9 +59,9 @@ class User(Base, AuditMixin, VersionMixin):
 
     # Account status
     status = Column(
-        SQLEnum(UserStatus, native_enum=True),
+        String(20),
         nullable=False,
-        default=UserStatus.PENDING_INVITATION,
+        default=UserStatus.PENDING_INVITATION.value,
     )  # type: ignore[var-annotated]
 
     # Manager relationship for organizational hierarchy
@@ -93,6 +93,10 @@ class User(Base, AuditMixin, VersionMixin):
     __table_args__ = (
         UniqueConstraint(
             "organization_id", "email_hash", name="uq_users_org_email"
+        ),
+        CheckConstraint(
+            "status IN ('ACTIVE', 'INACTIVE', 'LOCKED', 'PENDING_INVITATION')",
+            name="ck_users_status",
         ),
     )
 

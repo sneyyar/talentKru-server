@@ -2,23 +2,23 @@
 
 import enum
 import uuid
-from sqlalchemy import Column, String, DateTime, Integer, UniqueConstraint, Enum as SQLEnum, func
+from sqlalchemy import Column, String, DateTime, Integer, UniqueConstraint, CheckConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from app.base_model import AuditMixin, Base
 
 
 class DSARRequestType(str, enum.Enum):
     """Data Subject Access Request type enumeration."""
-    Access = "Access"
-    Erasure = "Erasure"
+    ACCESS = "ACCESS"
+    ERASURE = "ERASURE"
 
 
 class DSARStatus(str, enum.Enum):
     """Data Subject Access Request status enumeration."""
-    Pending = "Pending"
-    Processing = "Processing"
-    Completed = "Completed"
-    Denied = "Denied"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    DENIED = "DENIED"
 
 
 class DataSubjectAccessRequest(Base, AuditMixin):
@@ -29,11 +29,22 @@ class DataSubjectAccessRequest(Base, AuditMixin):
     dsar_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     candidate_id = Column(UUID(as_uuid=True), nullable=False)
     organization_id = Column(UUID(as_uuid=True), nullable=False)
-    request_type = Column(SQLEnum(DSARRequestType, native_enum=True), nullable=False)  # type: ignore[var-annotated]
-    status = Column(SQLEnum(DSARStatus, native_enum=True), nullable=False, default=DSARStatus.Pending)  # type: ignore[var-annotated]
+    request_type = Column(String(20), nullable=False)  # type: ignore[var-annotated]
+    status = Column(String(20), nullable=False, default=DSARStatus.PENDING.value)  # type: ignore[var-annotated]
     requested_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     denial_reason = Column(String(1000), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "request_type IN ('ACCESS', 'ERASURE')",
+            name="ck_data_subject_access_requests_request_type",
+        ),
+        CheckConstraint(
+            "status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'DENIED')",
+            name="ck_data_subject_access_requests_status",
+        ),
+    )
 
 
 class OrganizationRetentionPolicy(Base, AuditMixin):

@@ -9,17 +9,16 @@ Provides:
 import enum
 import uuid
 
-from sqlalchemy import Column, DateTime, String
-from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import Column, DateTime, String, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.base_model import Base
 
 
 class EventStatus(str, enum.Enum):
-    Pending = "Pending"
-    Processed = "Processed"
-    Failed = "Failed"
+    PENDING = "PENDING"
+    PROCESSED = "PROCESSED"
+    FAILED = "FAILED"
 
 
 class DomainEvent(Base):
@@ -31,9 +30,16 @@ class DomainEvent(Base):
     published_at = Column(DateTime(timezone=True), nullable=False)
     processed_at = Column(DateTime(timezone=True), nullable=True)
     status = Column(
-        SQLEnum(EventStatus, native_enum=True),
+        String(20),
         nullable=False,
-        default=EventStatus.Pending,
+        default=EventStatus.PENDING.value,
         index=True,
     )  # type: ignore[var-annotated]
     correlation_id = Column(String(64), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('PENDING', 'PROCESSED', 'FAILED')",
+            name="ck_domain_events_status",
+        ),
+    )

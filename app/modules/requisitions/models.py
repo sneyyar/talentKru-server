@@ -7,17 +7,17 @@ Inherits Base, AuditMixin, and VersionMixin to satisfy Requirements 7.1 and 7.5
 
 import enum
 import uuid
-from sqlalchemy import Column, String, UniqueConstraint, Enum as SQLEnum
+from sqlalchemy import Column, String, UniqueConstraint, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from app.base_model import AuditMixin, Base, VersionMixin
 
 
 class RequisitionStatus(str, enum.Enum):
     """Requisition status enumeration."""
-    Open = "Open"
-    OnHold = "OnHold"
-    Closed = "Closed"
-    Cancelled = "Cancelled"
+    OPEN = "OPEN"
+    ON_HOLD = "ON_HOLD"
+    CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"
 
 
 class JobRequisition(Base, AuditMixin, VersionMixin):
@@ -37,8 +37,15 @@ class JobRequisition(Base, AuditMixin, VersionMixin):
     department = Column(String(100), nullable=False)
     location = Column(String(200), nullable=False)
     hiring_manager_user_id = Column(UUID(as_uuid=True), nullable=False)
-    status = Column(SQLEnum(RequisitionStatus, native_enum=True), nullable=False, default=RequisitionStatus.Open)  # type: ignore[var-annotated]
+    status = Column(String(20), nullable=False, default=RequisitionStatus.OPEN.value)  # type: ignore[var-annotated]
     description = Column(String(5000), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('OPEN', 'ON_HOLD', 'CLOSED', 'CANCELLED')",
+            name="ck_job_requisitions_status",
+        ),
+    )
 
 
 class CandidateRequisition(Base, AuditMixin):

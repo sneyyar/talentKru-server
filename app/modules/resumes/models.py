@@ -5,7 +5,7 @@ Requirements: 2.1, 2.7
 
 import enum
 import uuid
-from sqlalchemy import Boolean, Column, Date, Enum as SQLEnum, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import Boolean, Column, Date, CheckConstraint, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from app.base_model import AuditMixin, Base, VersionMixin
 
@@ -13,9 +13,9 @@ from app.base_model import AuditMixin, Base, VersionMixin
 class ParseStatus(str, enum.Enum):
     """Resume parsing status enumeration."""
 
-    Pending = "Pending"
-    Completed = "Completed"
-    Failed = "Failed"
+    PENDING = "PENDING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 
 class Resume(Base, AuditMixin, VersionMixin):
@@ -50,11 +50,15 @@ class Resume(Base, AuditMixin, VersionMixin):
     file_size_bytes = Column(Integer, nullable=False)
     uploaded_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
     is_primary = Column(Boolean, nullable=False, default=False)
-    parse_status = Column(SQLEnum(ParseStatus, native_enum=True), nullable=False, default=ParseStatus.Pending)  # type: ignore[var-annotated]
+    parse_status = Column(String(20), nullable=False, default=ParseStatus.PENDING.value)  # type: ignore[var-annotated]
     parsed_data = Column(JSONB, nullable=True)
 
     # Partial index on candidate_id where deleted_at IS NULL
     __table_args__ = (
+        CheckConstraint(
+            "parse_status IN ('PENDING', 'COMPLETED', 'FAILED')",
+            name="ck_resumes_parse_status",
+        ),
         Index("idx_resumes_candidate", "candidate_id", postgresql_where=text("deleted_at IS NULL")),
     )
 

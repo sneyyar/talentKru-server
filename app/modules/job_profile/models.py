@@ -15,7 +15,6 @@ import uuid
 from sqlalchemy import (
     CheckConstraint,
     Column,
-    Enum as SQLEnum,
     ForeignKey,
     Integer,
     String,
@@ -32,8 +31,8 @@ class SkillDesignation(str, enum.Enum):
     Requirement 4.1: Designation values for skills in job profiles.
     """
 
-    REQUIRED = "required"
-    DESIRED = "desired"
+    REQUIRED = "REQUIRED"
+    DESIRED = "DESIRED"
 
 
 class JobProfile(Base, AuditMixin, VersionMixin):
@@ -90,9 +89,9 @@ class JobProfileSkill(Base, AuditMixin):
     
     # Designation: required or desired
     designation = Column(
-        SQLEnum(SkillDesignation, native_enum=True),
+        String(20),
         nullable=False,
-        default=SkillDesignation.REQUIRED,
+        default=SkillDesignation.REQUIRED.value,
     )  # type: ignore[var-annotated]
     
     # Required proficiency rank: 1-5
@@ -107,5 +106,10 @@ class JobProfileSkill(Base, AuditMixin):
         CheckConstraint(
             "required_proficiency_rank >= 1 AND required_proficiency_rank <= 5",
             name="ck_job_profile_skills_proficiency_rank",
+        ),
+        # Check constraint: valid designation values
+        CheckConstraint(
+            "designation IN ('REQUIRED', 'DESIRED')",
+            name="ck_job_profile_skills_designation",
         ),
     )
