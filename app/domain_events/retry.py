@@ -33,7 +33,7 @@ async def retry_failed_events(db: AsyncSession) -> dict:
 
     Requirements: 3.5, 3.6
     """
-    stmt = select(DomainEvent).where(DomainEvent.status == EventStatus.Failed)
+    stmt = select(DomainEvent).where(DomainEvent.status == EventStatus.FAILED.value)
     result = await db.execute(stmt)
     failed_events = list(result.scalars().all())
 

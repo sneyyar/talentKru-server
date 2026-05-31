@@ -58,10 +58,10 @@ class TestDSARIntegration:
         dsar = await portal_service.create_dsar(
             candidate_id=candidate.candidate_id,
             org_id=org_id,
-            request_type=DSARRequestType.Access,
+            request_type=DSARRequestType.ACCESS.value,
         )
         
-        assert dsar.status == DSARStatus.Pending
+        assert dsar.status == DSARStatus.PENDING.value
         
         # Process Access DSAR
         result = await privacy_service.process_access_dsar(
@@ -71,7 +71,7 @@ class TestDSARIntegration:
         
         # Verify status=COMPLETED
         db_dsar = await db_session.get(DataSubjectAccessRequest, dsar.dsar_id)
-        assert db_dsar.status == DSARStatus.Completed
+        assert db_dsar.status == DSARStatus.COMPLETED.value
         assert db_dsar.completed_at is not None
         
         # Verify result contains candidate data
@@ -111,10 +111,10 @@ class TestDSARIntegration:
         dsar = await portal_service.create_dsar(
             candidate_id=candidate_id,
             org_id=org_id,
-            request_type=DSARRequestType.Erasure,
+            request_type=DSARRequestType.ERASURE.value,
         )
         
-        assert dsar.status == DSARStatus.Pending
+        assert dsar.status == DSARStatus.PENDING.value
         
         # Process Erasure DSAR
         await privacy_service.process_erasure_dsar(
@@ -124,7 +124,7 @@ class TestDSARIntegration:
         
         # Verify status=COMPLETED
         db_dsar = await db_session.get(DataSubjectAccessRequest, dsar.dsar_id)
-        assert db_dsar.status == DSARStatus.Completed
+        assert db_dsar.status == DSARStatus.COMPLETED.value
         assert db_dsar.completed_at is not None
         
         # Verify candidate hard-deleted
@@ -165,7 +165,7 @@ class TestDSARIntegration:
         dsar = await portal_service.create_dsar(
             candidate_id=candidate_id,
             org_id=org_id,
-            request_type=DSARRequestType.Erasure,
+            request_type=DSARRequestType.ERASURE.value,
         )
         
         # Process Erasure DSAR
@@ -218,7 +218,7 @@ class TestDSARIntegration:
         dsar = await portal_service.create_dsar(
             candidate_id=candidate.candidate_id,
             org_id=org_id,
-            request_type=DSARRequestType.Access,
+            request_type=DSARRequestType.ACCESS.value,
         )
         
         # Deny with valid reason
@@ -233,7 +233,7 @@ class TestDSARIntegration:
         
         # Verify status=DENIED
         db_dsar = await db_session.get(DataSubjectAccessRequest, dsar.dsar_id)
-        assert db_dsar.status == DSARStatus.Denied
+        assert db_dsar.status == DSARStatus.DENIED.value
         assert db_dsar.denial_reason == denial_reason
 
     @pytest.mark.asyncio
@@ -266,7 +266,7 @@ class TestDSARIntegration:
         dsar = await portal_service.create_dsar(
             candidate_id=candidate.candidate_id,
             org_id=org_id,
-            request_type=DSARRequestType.Access,
+            request_type=DSARRequestType.ACCESS.value,
         )
         
         # Try to deny with short reason - should fail
@@ -282,7 +282,7 @@ class TestDSARIntegration:
         
         # Verify status unchanged
         db_dsar = await db_session.get(DataSubjectAccessRequest, dsar.dsar_id)
-        assert db_dsar.status == DSARStatus.Pending
+        assert db_dsar.status == DSARStatus.PENDING.value
 
     @pytest.mark.asyncio
     async def test_multiple_dsars_for_same_candidate(
@@ -315,13 +315,13 @@ class TestDSARIntegration:
         dsar1 = await portal_service.create_dsar(
             candidate_id=candidate.candidate_id,
             org_id=org_id,
-            request_type=DSARRequestType.Access,
+            request_type=DSARRequestType.ACCESS.value,
         )
         
         dsar2 = await portal_service.create_dsar(
             candidate_id=candidate.candidate_id,
             org_id=org_id,
-            request_type=DSARRequestType.Access,
+            request_type=DSARRequestType.ACCESS.value,
         )
         
         # Process both
@@ -339,8 +339,8 @@ class TestDSARIntegration:
         db_dsar1 = await db_session.get(DataSubjectAccessRequest, dsar1.dsar_id)
         db_dsar2 = await db_session.get(DataSubjectAccessRequest, dsar2.dsar_id)
         
-        assert db_dsar1.status == DSARStatus.Completed
-        assert db_dsar2.status == DSARStatus.Completed
+        assert db_dsar1.status == DSARStatus.COMPLETED.value
+        assert db_dsar2.status == DSARStatus.COMPLETED.value
         
         # Verify separate records
         assert dsar1.dsar_id != dsar2.dsar_id

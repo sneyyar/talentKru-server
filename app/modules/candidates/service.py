@@ -25,21 +25,21 @@ logger = get_logger(__name__)
 # Valid GlobalStatus transitions
 # Requirement 1.7: Restrict GlobalStatus transitions to valid paths
 VALID_TRANSITIONS: dict[GlobalStatus, set[GlobalStatus]] = {
-    GlobalStatus.Active: {
-        GlobalStatus.Interviewing,
-        GlobalStatus.Ineligible,
-        GlobalStatus.Deleted,
-        GlobalStatus.Expired,
+    GlobalStatus.ACTIVE: {
+        GlobalStatus.INTERVIEWING,
+        GlobalStatus.INELIGIBLE,
+        GlobalStatus.DELETED,
+        GlobalStatus.EXPIRED,
     },
-    GlobalStatus.Interviewing: {
-        GlobalStatus.Active,
-        GlobalStatus.Ineligible,
-        GlobalStatus.Deleted,
-        GlobalStatus.Expired,
+    GlobalStatus.INTERVIEWING: {
+        GlobalStatus.ACTIVE,
+        GlobalStatus.INELIGIBLE,
+        GlobalStatus.DELETED,
+        GlobalStatus.EXPIRED,
     },
-    GlobalStatus.Expired: {GlobalStatus.Active, GlobalStatus.Deleted},
-    GlobalStatus.Ineligible: set(),
-    GlobalStatus.Deleted: set(),
+    GlobalStatus.EXPIRED: {GlobalStatus.ACTIVE, GlobalStatus.DELETED},
+    GlobalStatus.INELIGIBLE: set(),
+    GlobalStatus.DELETED: set(),
 }
 
 
@@ -121,7 +121,7 @@ class CandidateService:
             email_hash=email_hash,
             phone=encrypted_phone,
             location=location,
-            global_status=GlobalStatus.Active,
+            global_status=GlobalStatus.ACTIVE.value,
         )
 
         self.db.add(candidate)
@@ -184,7 +184,7 @@ class CandidateService:
             )
 
         # Requirement 1.4: Enforce ineligibility_reason when transitioning to INELIGIBLE
-        if new_status == GlobalStatus.Ineligible:
+        if new_status == GlobalStatus.INELIGIBLE:
             if not ineligibility_reason or not ineligibility_reason.strip():
                 raise HTTPException(
                     status_code=400,
@@ -193,7 +193,7 @@ class CandidateService:
             candidate.ineligibility_reason = ineligibility_reason  # type: ignore[assignment]
 
         # Requirement 1.5: Set deleted_at/deleted_by when transitioning to DELETED
-        if new_status == GlobalStatus.Deleted:
+        if new_status == GlobalStatus.DELETED:
             candidate.deleted_at = datetime.now(timezone.utc)  # type: ignore[assignment]
             candidate.deleted_by = updated_by  # type: ignore[assignment]
 
@@ -396,7 +396,7 @@ class CandidateService:
         result = await self.db.execute(
             select(Candidate).where(
                 and_(
-                    Candidate.global_status == GlobalStatus.Active,
+                    Candidate.global_status == GlobalStatus.ACTIVE,
                     Candidate.updated_at < cutoff,
                     Candidate.deleted_at.is_(None),
                     ~Candidate.candidate_id.in_(active_journey_subq),
@@ -407,7 +407,7 @@ class CandidateService:
         
         # Mark each as EXPIRED and publish event
         for candidate in candidates:
-            candidate.global_status = GlobalStatus.Expired  # type: ignore[assignment]
+            candidate.global_status = GlobalStatus.EXPIRED.value  # type: ignore[assignment]
             await publish_event(
                 "candidate_expired",
                 {"candidate_id": str(candidate.candidate_id)},

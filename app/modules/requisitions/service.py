@@ -28,10 +28,10 @@ logger = get_logger(__name__)
 
 # Valid requisition status transitions
 VALID_REQUISITION_TRANSITIONS = {
-    RequisitionStatus.Open: [RequisitionStatus.OnHold, RequisitionStatus.Closed, RequisitionStatus.Cancelled],
-    RequisitionStatus.OnHold: [RequisitionStatus.Open, RequisitionStatus.Cancelled],
-    RequisitionStatus.Closed: [],
-    RequisitionStatus.Cancelled: [],
+    RequisitionStatus.OPEN: [RequisitionStatus.ON_HOLD, RequisitionStatus.CLOSED, RequisitionStatus.CANCELLED],
+    RequisitionStatus.ON_HOLD: [RequisitionStatus.OPEN, RequisitionStatus.CANCELLED],
+    RequisitionStatus.CLOSED: [],
+    RequisitionStatus.CANCELLED: [],
 }
 
 
@@ -70,7 +70,7 @@ class RequisitionService:
             department=department,
             location=location,
             description=description,
-            status=RequisitionStatus.Open,
+            status=RequisitionStatus.OPEN.value,
             created_by=created_by,
         )
         
@@ -83,7 +83,7 @@ class RequisitionService:
             payload={
                 "requisition_id": str(requisition.job_requisition_id),
                 "organization_id": str(org_id),
-                "status": RequisitionStatus.Open,
+                "status": RequisitionStatus.OPEN.value,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             db=self.db,
@@ -206,7 +206,7 @@ class RequisitionService:
             )
         
         # Validate requisition status is OPEN
-        if requisition.status != RequisitionStatus.Open:
+        if requisition.status != RequisitionStatus.OPEN.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Requisition status must be OPEN, not {requisition.status}",
@@ -231,7 +231,7 @@ class RequisitionService:
             )
         
         # Validate candidate status
-        if candidate.global_status not in (GlobalStatus.Active, GlobalStatus.Interviewing):
+        if candidate.global_status not in (GlobalStatus.ACTIVE, GlobalStatus.INTERVIEWING):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Candidate status must be ACTIVE or INTERVIEWING, not {candidate.global_status}",

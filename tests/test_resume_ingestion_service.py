@@ -55,7 +55,7 @@ async def test_apply_ingestion_results_creates_candidate():
         file_size_bytes=1024,
         uploaded_by_user_id=user_id,
         is_primary=True,
-        parse_status=ParseStatus.Pending,
+        parse_status=ParseStatus.PENDING.value,
     )
     
     extracted_data = {
@@ -113,7 +113,7 @@ async def test_apply_ingestion_results_creates_job_history():
         file_size_bytes=1024,
         uploaded_by_user_id=user_id,
         is_primary=True,
-        parse_status=ParseStatus.Pending,
+        parse_status=ParseStatus.PENDING.value,
     )
     
     extracted_data = {
@@ -188,7 +188,7 @@ async def test_apply_ingestion_results_handles_empty_skills():
         file_size_bytes=1024,
         uploaded_by_user_id=user_id,
         is_primary=True,
-        parse_status=ParseStatus.Pending,
+        parse_status=ParseStatus.PENDING.value,
     )
     
     extracted_data = {
@@ -256,7 +256,7 @@ class TestParseStatusTransitions:
             file_size_bytes=1024,
             uploaded_by_user_id=user_id,
             is_primary=True,
-            parse_status=ParseStatus.Pending,
+            parse_status=ParseStatus.PENDING.value,
         )
         
         # Mock db.get to return the resume
@@ -284,7 +284,7 @@ class TestParseStatusTransitions:
                             await _run_ingestion(resume_id, "local://test.pdf", org_id, correlation_id)
             
             # Verify parse_status is COMPLETED
-            assert resume.parse_status == ParseStatus.Completed
+            assert resume.parse_status == ParseStatus.COMPLETED.value
             assert resume.parsed_data is not None
         else:
             # Mock failed agent response
@@ -296,7 +296,7 @@ class TestParseStatusTransitions:
                     await _run_ingestion(resume_id, "local://test.pdf", org_id, correlation_id)
             
             # Verify parse_status is FAILED
-            assert resume.parse_status == ParseStatus.Failed
+            assert resume.parse_status == ParseStatus.FAILED.value
 
 
 class TestIngestionUpsertRecords:
@@ -343,7 +343,7 @@ class TestIngestionUpsertRecords:
             file_size_bytes=1024,
             uploaded_by_user_id=user_id,
             is_primary=True,
-            parse_status=ParseStatus.Pending,
+            parse_status=ParseStatus.PENDING.value,
         )
         
         # Create job history entries

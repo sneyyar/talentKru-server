@@ -59,7 +59,7 @@ class TestRequisitionIntegration:
         )
         
         # Verify status=OPEN
-        assert requisition.status == RequisitionStatus.Open
+        assert requisition.status == RequisitionStatus.OPEN.value
         assert requisition.created_at is not None
 
     @pytest.mark.asyncio
@@ -167,7 +167,7 @@ class TestRequisitionIntegration:
         await candidate_service.transition_status(
             candidate_id=candidate.candidate_id,
             org_id=org_id,
-            new_status=GlobalStatus.Ineligible,
+            new_status=GlobalStatus.INELIGIBLE.value,
             ineligibility_reason="Does not meet requirements",
             updated_by=user_id,
         )
@@ -218,27 +218,27 @@ class TestRequisitionIntegration:
             created_by=user_id,
         )
         
-        assert requisition.status == RequisitionStatus.Open
+        assert requisition.status == RequisitionStatus.OPEN.value
         
         # Transition to ON_HOLD
         updated = await requisition_service.transition_status(
             requisition_id=requisition.job_requisition_id,
             org_id=org_id,
-            new_status=RequisitionStatus.OnHold,
+            new_status=RequisitionStatus.ON_HOLD.value,
             updated_by=user_id,
         )
         
-        assert updated.status == RequisitionStatus.OnHold
+        assert updated.status == RequisitionStatus.ON_HOLD.value
         
         # Transition to CLOSED
         updated = await requisition_service.transition_status(
             requisition_id=requisition.job_requisition_id,
             org_id=org_id,
-            new_status=RequisitionStatus.Closed,
+            new_status=RequisitionStatus.CLOSED.value,
             updated_by=user_id,
         )
         
-        assert updated.status == RequisitionStatus.Closed
+        assert updated.status == RequisitionStatus.CLOSED.value
 
     @pytest.mark.asyncio
     async def test_invalid_status_transition_fails(
@@ -280,7 +280,7 @@ class TestRequisitionIntegration:
             await requisition_service.transition_status(
                 requisition_id=requisition.job_requisition_id,
                 org_id=org_id,
-                new_status=RequisitionStatus.Cancelled,
+                new_status=RequisitionStatus.CANCELLED.value,
                 updated_by=user_id,
             )
         
@@ -288,4 +288,4 @@ class TestRequisitionIntegration:
         
         # Verify status unchanged
         db_requisition = await db_session.get(JobRequisition, requisition.job_requisition_id)
-        assert db_requisition.status == RequisitionStatus.Open
+        assert db_requisition.status == RequisitionStatus.OPEN.value

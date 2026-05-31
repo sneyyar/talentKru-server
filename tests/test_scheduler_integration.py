@@ -59,7 +59,7 @@ class TestSchedulerIntegration:
         
         # Verify candidate marked as EXPIRED
         db_candidate = await db_session.get(Candidate, candidate.candidate_id)
-        assert db_candidate.global_status == GlobalStatus.Expired
+        assert db_candidate.global_status == GlobalStatus.EXPIRED.value
         assert count >= 1
 
     @pytest.mark.asyncio
@@ -96,7 +96,7 @@ class TestSchedulerIntegration:
         
         # Verify candidate still ACTIVE
         db_candidate = await db_session.get(Candidate, candidate.candidate_id)
-        assert db_candidate.global_status == GlobalStatus.Active
+        assert db_candidate.global_status == GlobalStatus.ACTIVE.value
 
     @pytest.mark.asyncio
     async def test_retention_purge_deletes_old_resumes(
@@ -134,7 +134,7 @@ class TestSchedulerIntegration:
             file_size=1024,
             mime_type="application/pdf",
             storage_uri="local://resume.pdf",
-            parse_status=ParseStatus.Completed,
+            parse_status=ParseStatus.COMPLETED.value,
             created_by=user_id,
         )
         db_session.add(resume)
@@ -203,7 +203,7 @@ class TestSchedulerIntegration:
             file_size=1024,
             mime_type="application/pdf",
             storage_uri="local://resume.pdf",
-            parse_status=ParseStatus.Completed,
+            parse_status=ParseStatus.COMPLETED.value,
             created_by=user_id,
         )
         db_session.add(resume)

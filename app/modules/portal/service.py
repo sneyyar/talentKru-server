@@ -42,7 +42,7 @@ class PortalService:
             organization_id=org_id,
             candidate_id=candidate_id,
             request_type=request_type_enum,
-            status=DSARStatus.Pending,
+            status=DSARStatus.PENDING.value,
             requested_at=datetime.now(timezone.utc),
         )
         

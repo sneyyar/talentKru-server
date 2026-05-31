@@ -84,7 +84,7 @@ class TestSmokeCandidateLifecycle:
         - Verify INELIGIBLE value exists
         - Verify DELETED value exists
         """
-        required_values = ["Active", "Interviewing", "Expired", "Ineligible", "Deleted"]
+        required_values = ["ACTIVE", "INTERVIEWING", "EXPIRED", "INELIGIBLE", "DELETED"]
         
         for value in required_values:
             assert hasattr(GlobalStatus, value), f"GlobalStatus missing {value}"
@@ -100,7 +100,7 @@ class TestSmokeCandidateLifecycle:
         - Verify COMPLETED value exists
         - Verify FAILED value exists
         """
-        required_values = ["Pending", "Completed", "Failed"]
+        required_values = ["PENDING", "COMPLETED", "FAILED"]
         
         for value in required_values:
             assert hasattr(ParseStatus, value), f"ParseStatus missing {value}"
@@ -117,7 +117,7 @@ class TestSmokeCandidateLifecycle:
         - Verify CLOSED value exists
         - Verify CANCELLED value exists
         """
-        required_values = ["Open", "OnHold", "Closed", "Cancelled"]
+        required_values = ["OPEN", "ON_HOLD", "CLOSED", "CANCELLED"]
         
         for value in required_values:
             assert hasattr(RequisitionStatus, value), f"RequisitionStatus missing {value}"
@@ -132,7 +132,7 @@ class TestSmokeCandidateLifecycle:
         - Verify ACCESS value exists
         - Verify ERASURE value exists
         """
-        required_values = ["Access", "Erasure"]
+        required_values = ["ACCESS", "ERASURE"]
         
         for value in required_values:
             assert hasattr(DSARRequestType, value), f"DSARRequestType missing {value}"
@@ -148,7 +148,7 @@ class TestSmokeCandidateLifecycle:
         - Verify COMPLETED value exists
         - Verify DENIED value exists
         """
-        required_values = ["Pending", "Completed", "Denied"]
+        required_values = ["PENDING", "COMPLETED", "DENIED"]
         
         for value in required_values:
             assert hasattr(DSARStatus, value), f"DSARStatus missing {value}"

@@ -49,7 +49,7 @@ class PrivacyService:
         Requirements: 6.2
         """
         # Guard: only process Access requests
-        if dsar.request_type != DSARRequestType.Access:
+        if dsar.request_type != DSARRequestType.ACCESS.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="This workflow only processes Access requests",
@@ -168,7 +168,7 @@ class PrivacyService:
             })
         
         # Update DSAR status
-        dsar.status = DSARStatus.Completed
+        dsar.status = DSARStatus.COMPLETED.value
         dsar.completed_at = datetime.now(timezone.utc)
         await self.db.flush()
         
@@ -247,7 +247,7 @@ class PrivacyService:
         )
         
         # Update DSAR status
-        dsar.status = DSARStatus.Completed
+        dsar.status = DSARStatus.COMPLETED.value
         dsar.completed_at = datetime.now(timezone.utc)
         await self.db.flush()
         
@@ -280,7 +280,7 @@ class PrivacyService:
             )
         
         # Update DSAR
-        dsar.status = DSARStatus.Denied
+        dsar.status = DSARStatus.DENIED.value
         dsar.denial_reason = denial_reason
         await self.db.flush()
         

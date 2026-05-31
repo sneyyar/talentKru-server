@@ -45,7 +45,7 @@ async def publish_event(
         event_type=event_type,
         payload=payload,
         published_at=datetime.now(timezone.utc),
-        status=EventStatus.Pending,
+        status=EventStatus.PENDING.value,
         correlation_id=correlation_id,
     )
     db.add(event)
@@ -87,10 +87,10 @@ async def _dispatch_with_status_update(
             return
         try:
             await dispatch_event(event, correlation_id)
-            event.status = EventStatus.Processed
+            event.status = EventStatus.PROCESSED.value
             event.processed_at = datetime.now(timezone.utc)
         except Exception as exc:
-            event.status = EventStatus.Failed  # type: ignore[assignment]
+            event.status = EventStatus.FAILED.value  # type: ignore[assignment]
             logger.error(
                 "domain_event_handler_failed",
                 event_id=str(event_id),

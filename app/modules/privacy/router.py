@@ -127,9 +127,9 @@ async def process_dsar(
         )
     
     # Process based on request type
-    if dsar.request_type == DSARRequestType.Access:
+    if dsar.request_type == DSARRequestType.ACCESS.value:
         await service.process_access_dsar(dsar)
-    elif dsar.request_type == DSARRequestType.Erasure:
+    elif dsar.request_type == DSARRequestType.ERASURE.value:
         await service.process_erasure_dsar(dsar)
     else:
         raise HTTPException(

@@ -85,8 +85,8 @@ class TestPortalDSARCreation:
         assert dsar.dsar_id is not None
         assert dsar.candidate_id == candidate_id
         assert dsar.organization_id == org_id
-        assert dsar.request_type == DSARRequestType.Access
-        assert dsar.status == DSARStatus.Pending
+        assert dsar.request_type == DSARRequestType.ACCESS.value
+        assert dsar.status == DSARStatus.PENDING.value
         assert dsar.requested_at is not None
         assert isinstance(dsar.requested_at, datetime)
         assert dsar.completed_at is None
@@ -115,8 +115,8 @@ class TestPortalDSARCreation:
         assert dsar.dsar_id is not None
         assert dsar.candidate_id == candidate_id
         assert dsar.organization_id == org_id
-        assert dsar.request_type == DSARRequestType.Erasure
-        assert dsar.status == DSARStatus.Pending
+        assert dsar.request_type == DSARRequestType.ERASURE.value
+        assert dsar.status == DSARStatus.PENDING.value
         assert dsar.requested_at is not None
 
     @pytest.mark.asyncio
@@ -147,8 +147,8 @@ class TestPortalDSARCreation:
         assert retrieved.dsar_id == dsar_id
         assert retrieved.candidate_id == candidate_id
         assert retrieved.organization_id == org_id
-        assert retrieved.request_type == DSARRequestType.Access
-        assert retrieved.status == DSARStatus.Pending
+        assert retrieved.request_type == DSARRequestType.ACCESS.value
+        assert retrieved.status == DSARStatus.PENDING.value
 
     @pytest.mark.asyncio
     async def test_multiple_dsars_for_same_candidate(
@@ -177,10 +177,10 @@ class TestPortalDSARCreation:
         )
         
         assert dsar1.dsar_id != dsar2.dsar_id
-        assert dsar1.request_type == DSARRequestType.Access
-        assert dsar2.request_type == DSARRequestType.Erasure
-        assert dsar1.status == DSARStatus.Pending
-        assert dsar2.status == DSARStatus.Pending
+        assert dsar1.request_type == DSARRequestType.ACCESS.value
+        assert dsar2.request_type == DSARRequestType.ERASURE.value
+        assert dsar1.status == DSARStatus.PENDING.value
+        assert dsar2.status == DSARStatus.PENDING.value
 
     @pytest.mark.asyncio
     async def test_dsar_audit_fields_populated(

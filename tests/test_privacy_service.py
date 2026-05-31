@@ -260,11 +260,11 @@ class TestDSARAccessWorkflowProperties:
         dsar.candidate_id = candidate_id
         dsar.organization_id = org_id
         dsar.request_type = request_type
-        dsar.status = DSARStatus.Pending
+        dsar.status = DSARStatus.PENDING.value
         
         service = PrivacyService(mock_db)
         
-        if request_type != DSARRequestType.Access:
+        if request_type != DSARRequestType.ACCESS.value:
             # Should raise HTTPException 400
             with pytest.raises(HTTPException) as exc_info:
                 await service.process_access_dsar(dsar)
@@ -283,7 +283,7 @@ class TestDSARAccessWorkflowProperties:
             mock_candidate.email = b"encrypted_email"
             mock_candidate.phone = None
             mock_candidate.location = "New York"
-            mock_candidate.global_status = GlobalStatus.Active
+            mock_candidate.global_status = GlobalStatus.ACTIVE.value
             mock_candidate.ineligibility_reason = None
             mock_candidate.created_at = datetime.now(timezone.utc)
             mock_candidate.updated_at = datetime.now(timezone.utc)
@@ -311,7 +311,7 @@ class TestDSARAccessWorkflowProperties:
                 assert "resumes" in result
                 
                 # Verify DSAR status was updated
-                assert dsar.status == DSARStatus.Completed
+                assert dsar.status == DSARStatus.COMPLETED.value
                 assert dsar.completed_at is not None
 
 
@@ -347,8 +347,8 @@ class TestDSARErasureHardDeleteProperties:
         dsar.dsar_id = uuid4()
         dsar.candidate_id = candidate_id
         dsar.organization_id = org_id
-        dsar.request_type = DSARRequestType.Erasure
-        dsar.status = DSARStatus.Pending
+        dsar.request_type = DSARRequestType.ERASURE.value
+        dsar.status = DSARStatus.PENDING.value
         
         service = PrivacyService(mock_db)
         
@@ -380,7 +380,7 @@ class TestDSARErasureHardDeleteProperties:
         assert len(update_calls) >= 1  # At least one update for audit log
         
         # Verify DSAR status was updated to COMPLETED
-        assert dsar.status == DSARStatus.Completed
+        assert dsar.status == DSARStatus.COMPLETED.value
         assert dsar.completed_at is not None
 
 
@@ -419,8 +419,8 @@ class TestDSARDenialMinimumLengthProperties:
         dsar.dsar_id = uuid4()
         dsar.candidate_id = candidate_id
         dsar.organization_id = org_id
-        dsar.request_type = DSARRequestType.Access
-        dsar.status = DSARStatus.Pending
+        dsar.request_type = DSARRequestType.ACCESS.value
+        dsar.status = DSARStatus.PENDING.value
         dsar.denial_reason = None
         
         service = PrivacyService(mock_db)
@@ -435,14 +435,14 @@ class TestDSARDenialMinimumLengthProperties:
             assert "10 characters" in exc_info.value.detail
             
             # DSAR status should remain unchanged
-            assert dsar.status == DSARStatus.Pending
+            assert dsar.status == DSARStatus.PENDING.value
         else:
             # This branch won't be reached with the given strategy,
             # but we include it for completeness
             await service.deny_dsar(dsar, reason, denied_by)
             
             # DSAR status should be DENIED
-            assert dsar.status == DSARStatus.Denied
+            assert dsar.status == DSARStatus.DENIED.value
             assert dsar.denial_reason == reason
 
     @given(reason=st.text(min_size=10, max_size=1000, alphabet=st.characters(blacklist_categories=("Cc", "Cs"))))
@@ -475,8 +475,8 @@ class TestDSARDenialMinimumLengthProperties:
         dsar.dsar_id = uuid4()
         dsar.candidate_id = candidate_id
         dsar.organization_id = org_id
-        dsar.request_type = DSARRequestType.Access
-        dsar.status = DSARStatus.Pending
+        dsar.request_type = DSARRequestType.ACCESS.value
+        dsar.status = DSARStatus.PENDING.value
         dsar.denial_reason = None
         
         service = PrivacyService(mock_db)
@@ -486,7 +486,7 @@ class TestDSARDenialMinimumLengthProperties:
         await service.deny_dsar(dsar, reason, denied_by)
         
         # Verify DSAR was updated
-        assert dsar.status == DSARStatus.Denied
+        assert dsar.status == DSARStatus.DENIED.value
         assert dsar.denial_reason == reason
         
         # Verify flush was called

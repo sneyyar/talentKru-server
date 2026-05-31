@@ -231,7 +231,7 @@ class TestIneligibleStatusRequiresReason:
             email_hash=hashlib.sha256("test@example.com".lower().encode()).hexdigest(),
             phone=None,
             location=None,
-            global_status=GlobalStatus.Active,
+            global_status=GlobalStatus.ACTIVE.value,
         )
         test_db.add(candidate)
         await test_db.flush()
@@ -243,21 +243,21 @@ class TestIneligibleStatusRequiresReason:
             with pytest.raises(HTTPException) as exc_info:
                 await service.transition_status(
                     candidate=candidate,
-                    new_status=GlobalStatus.Ineligible,
+                    new_status=GlobalStatus.INELIGIBLE.value,
                     ineligibility_reason=reason,
                     updated_by=user_id,
                 )
             assert exc_info.value.status_code == 400
-            assert candidate.global_status == GlobalStatus.Active
+            assert candidate.global_status == GlobalStatus.ACTIVE.value
         else:
             # Valid reason should succeed
             updated = await service.transition_status(
                 candidate=candidate,
-                new_status=GlobalStatus.Ineligible,
+                new_status=GlobalStatus.INELIGIBLE.value,
                 ineligibility_reason=reason,
                 updated_by=user_id,
             )
-            assert updated.global_status == GlobalStatus.Ineligible
+            assert updated.global_status == GlobalStatus.INELIGIBLE.value
             assert updated.ineligibility_reason == reason
 
 
@@ -306,7 +306,7 @@ class TestLogicalDeleteExcludesFromSearch:
         # Transition to DELETED
         await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.Deleted,
+            new_status=GlobalStatus.DELETED.value,
             updated_by=user_id,
         )
         
@@ -377,7 +377,7 @@ class TestCandidateCreation:
             created_by=user_id,
         )
         
-        assert candidate.global_status == GlobalStatus.Active
+        assert candidate.global_status == GlobalStatus.ACTIVE.value
 
     @pytest.mark.asyncio
     async def test_get_candidate_returns_404_for_missing(
@@ -410,7 +410,7 @@ class TestCandidateCreation:
         # Delete the candidate
         await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.Deleted,
+            new_status=GlobalStatus.DELETED.value,
             updated_by=user_id,
         )
         

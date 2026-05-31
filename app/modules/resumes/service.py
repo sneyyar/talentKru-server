@@ -104,7 +104,7 @@ class ResumeService:
             file_size_bytes=len(file_bytes),
             uploaded_by_user_id=uploaded_by,
             is_primary=candidate_id is None,  # First resume for candidate becomes primary
-            parse_status=ParseStatus.Pending,
+            parse_status=ParseStatus.PENDING.value,
         )
         self.db.add(resume)
         await self.db.flush()
@@ -182,7 +182,7 @@ async def _run_ingestion(
             await _apply_ingestion_results(resume, parsed_data, org_id, db)
 
             # Requirement 2.6: Set parse_status=COMPLETED
-            resume.parse_status = ParseStatus.Completed  # type: ignore[assignment]
+            resume.parse_status = ParseStatus.COMPLETED.value  # type: ignore[assignment]
             resume.parsed_data = parsed_data
 
             logger.info(
@@ -194,7 +194,7 @@ async def _run_ingestion(
 
         except Exception as exc:
             # Requirement 2.8: Set parse_status=FAILED and log error
-            resume.parse_status = ParseStatus.Failed  # type: ignore[assignment]
+            resume.parse_status = ParseStatus.FAILED.value  # type: ignore[assignment]
             logger.error(
                 "resume_ingestion_failed",
                 resume_id=str(resume_id),

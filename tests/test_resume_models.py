@@ -18,20 +18,20 @@ class TestParseStatus:
 
     def test_parse_status_values(self):
         """Verify ParseStatus enum has correct values."""
-        assert ParseStatus.Pending.value == "Pending"
-        assert ParseStatus.Completed.value == "Completed"
-        assert ParseStatus.Failed.value == "Failed"
+        assert ParseStatus.PENDING.value == "PENDING"
+        assert ParseStatus.COMPLETED.value == "COMPLETED"
+        assert ParseStatus.FAILED.value == "FAILED"
 
     def test_parse_status_is_string_enum(self):
         """Verify ParseStatus is a string enum."""
-        assert isinstance(ParseStatus.Pending, str)
-        assert isinstance(ParseStatus.Completed, str)
-        assert isinstance(ParseStatus.Failed, str)
+        assert isinstance(ParseStatus.PENDING, str)
+        assert isinstance(ParseStatus.COMPLETED, str)
+        assert isinstance(ParseStatus.FAILED, str)
 
     def test_parse_status_members(self):
         """Verify all ParseStatus members are present."""
         members = {member.name for member in ParseStatus}
-        assert members == {"Pending", "Completed", "Failed"}
+        assert members == {"PENDING", "COMPLETED", "FAILED"}
 
 
 class TestResumeModel:
@@ -111,7 +111,7 @@ class TestResumeModel:
         
         # Check defaults
         assert columns["is_primary"].default.arg is False
-        assert columns["parse_status"].default.arg == ParseStatus.Pending.value
+        assert columns["parse_status"].default.arg == ParseStatus.PENDING.value
 
     def test_resume_foreign_keys(self):
         """Verify Resume model has correct foreign keys."""

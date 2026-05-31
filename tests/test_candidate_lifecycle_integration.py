@@ -56,7 +56,7 @@ class TestCandidateLifecycleIntegration:
         # Verify candidate created
         assert candidate.candidate_id is not None
         assert candidate.organization_id == org_id
-        assert candidate.global_status == GlobalStatus.Active
+        assert candidate.global_status == GlobalStatus.ACTIVE.value
         
         # Verify in database
         db_candidate = await db_session.get(Candidate, candidate.candidate_id)
@@ -191,27 +191,27 @@ class TestCandidateLifecycleIntegration:
             created_by=user_id,
         )
         
-        assert candidate.global_status == GlobalStatus.Active
+        assert candidate.global_status == GlobalStatus.ACTIVE.value
         
         # Transition to INTERVIEWING
         updated = await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.Interviewing,
+            new_status=GlobalStatus.INTERVIEWING.value,
             ineligibility_reason=None,
             updated_by=user_id,
         )
         
-        assert updated.global_status == GlobalStatus.Interviewing
+        assert updated.global_status == GlobalStatus.INTERVIEWING.value
         
         # Transition to EXPIRED
         updated = await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.Expired,
+            new_status=GlobalStatus.EXPIRED.value,
             ineligibility_reason=None,
             updated_by=user_id,
         )
         
-        assert updated.global_status == GlobalStatus.Expired
+        assert updated.global_status == GlobalStatus.EXPIRED.value
 
     @pytest.mark.asyncio
     async def test_transition_to_ineligible_requires_reason(
@@ -245,7 +245,7 @@ class TestCandidateLifecycleIntegration:
         with pytest.raises(HTTPException) as exc_info:
             await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.Ineligible,
+            new_status=GlobalStatus.INELIGIBLE.value,
             ineligibility_reason=None,
             updated_by=user_id,
         )
@@ -255,12 +255,12 @@ class TestCandidateLifecycleIntegration:
         # Transition with valid reason - should succeed
         updated = await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.Ineligible,
+            new_status=GlobalStatus.INELIGIBLE.value,
             ineligibility_reason="Does not meet minimum requirements",
             updated_by=user_id,
         )
         
-        assert updated.global_status == GlobalStatus.Ineligible
+        assert updated.global_status == GlobalStatus.INELIGIBLE.value
         assert updated.ineligibility_reason == "Does not meet minimum requirements"
 
     @pytest.mark.asyncio
@@ -296,12 +296,12 @@ class TestCandidateLifecycleIntegration:
         # Transition to DELETED
         deleted = await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.Deleted,
+            new_status=GlobalStatus.DELETED.value,
             ineligibility_reason=None,
             updated_by=user_id,
         )
         
-        assert deleted.global_status == GlobalStatus.Deleted
+        assert deleted.global_status == GlobalStatus.DELETED.value
         assert deleted.deleted_at is not None
         
         # Search for candidate - should not find it
@@ -318,4 +318,4 @@ class TestCandidateLifecycleIntegration:
         db_candidate = await db_session.get(Candidate, candidate_id)
         assert db_candidate is not None
         assert db_candidate.deleted_at is not None
-        assert db_candidate.global_status == GlobalStatus.Deleted
+        assert db_candidate.global_status == GlobalStatus.DELETED.value
