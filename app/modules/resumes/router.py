@@ -2,8 +2,9 @@
 
 Endpoints:
 - POST /api/v1/resumes/upload — Upload a resume file (multipart/form-data)
-- GET /api/v1/candidates/{candidate_id}/resumes — List resumes for a candidate (paginated)
 - GET /api/v1/resumes/{resume_id} — Retrieve resume metadata and parsed data
+
+Note: GET /api/v1/candidates/{candidate_id}/resumes is implemented in the candidates router.
 
 Requirements: 2.2, 2.9, 2.10
 """
@@ -11,15 +12,15 @@ Requirements: 2.2, 2.9, 2.10
 from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_
 
 from app.database import get_db_session
 from app.dependencies import Principal
-from app.modules.auth.dependencies import get_current_principal, require_role
+from app.modules.auth.dependencies import require_role
 from app.modules.resumes.models import Resume, ParseStatus
-from app.modules.resumes.schemas import ResumeUploadResponse, ResumeResponse, PaginatedResumeList
+from app.modules.resumes.schemas import ResumeUploadResponse, ResumeResponse
 from app.modules.resumes.service import ResumeService
-from app.modules.resumes.storage import get_storage_service, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES
+from app.modules.resumes.storage import get_storage_service
 from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -33,7 +34,7 @@ router = APIRouter(prefix="/resumes", tags=["resumes"])
     status_code=status.HTTP_202_ACCEPTED,
     operation_id="upload_resume",
     summary="Upload a resume file",
-    description="Upload a resume file in PDF, DOC, or DOCX format (max 10 MB). Returns 202 Accepted with resume ID and parsing status.",
+    description="Upload a resume file in PDF, DOC, or DOCX format (max 10 MB). Requires Recruiter or Administrator role. Returns 202 Accepted with resume ID and parsing status.",
     responses={
         202: {"description": "Resume accepted for processing", "model": ResumeUploadResponse},
         400: {"description": "Invalid request data"},
@@ -83,98 +84,12 @@ async def upload_resume(
 
 
 @router.get(
-    "/candidates/{candidate_id}/resumes",
-    response_model=PaginatedResumeList,
-    status_code=status.HTTP_200_OK,
-    operation_id="list_candidate_resumes",
-    summary="List resumes for a candidate",
-    description="List all resumes for a candidate with pagination (max 50 per page).",
-    responses={
-        200: {"description": "Resumes retrieved successfully", "model": PaginatedResumeList},
-        403: {"description": "Forbidden: User does not have required role"},
-        404: {"description": "Not Found: Candidate not found"},
-    },
-)
-async def list_candidate_resumes(
-    candidate_id: UUID,
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    page_size: int = Query(50, ge=1, le=50, description="Number of resumes per page (max 50)"),
-    principal: Principal = Depends(require_role("Recruiter", "Administrator", "HiringManager")),
-    db: AsyncSession = Depends(get_db_session),
-) -> PaginatedResumeList:
-    """
-    List resumes for a candidate.
-    
-    Requirement 2.9: Support listing resumes for a candidate with pagination.
-    Requirement 2.10: Restrict to Recruiter, Administrator, HiringManager roles.
-    
-    Requirements: 2.9, 2.10
-    """
-    # Verify candidate belongs to the same organization
-    from app.modules.candidates.models import Candidate
-    
-    candidate_result = await db.execute(
-        select(Candidate).where(
-            and_(
-                Candidate.candidate_id == candidate_id,
-                Candidate.organization_id == principal.organization_id,
-                Candidate.deleted_at.is_(None),
-            )
-        )
-    )
-    if not candidate_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidate not found",
-        )
-    
-    # Count total resumes for candidate
-    count_result = await db.execute(
-        select(func.count()).select_from(Resume).where(
-            and_(
-                Resume.candidate_id == candidate_id,
-                Resume.organization_id == principal.organization_id,
-                Resume.deleted_at.is_(None),
-            )
-        )
-    )
-    total_count = count_result.scalar() or 0
-    
-    # Fetch paginated resumes
-    offset = (page - 1) * page_size
-    result = await db.execute(
-        select(Resume)
-        .where(
-            and_(
-                Resume.candidate_id == candidate_id,
-                Resume.organization_id == principal.organization_id,
-                Resume.deleted_at.is_(None),
-            )
-        )
-        .order_by(Resume.created_at.desc())
-        .offset(offset)
-        .limit(page_size)
-    )
-    resumes = result.scalars().all()
-    
-    total_pages = (total_count + page_size - 1) // page_size
-    
-    return PaginatedResumeList(
-        items=[ResumeResponse.from_orm(r) for r in resumes],
-        total=total_count,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
-
-
-@router.get(
     "/{resume_id}",
     response_model=ResumeResponse,
     status_code=status.HTTP_200_OK,
     operation_id="get_resume",
     summary="Retrieve resume metadata and parsed data",
-    description="Retrieve a resume by ID with all metadata and parsed fields.",
+    description="Retrieve a resume by ID with all metadata and parsed fields. Requires Recruiter, Administrator, or HiringManager role.",
     responses={
         200: {"description": "Resume retrieved successfully", "model": ResumeResponse},
         403: {"description": "Forbidden: User does not have required role"},

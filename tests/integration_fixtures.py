@@ -1,8 +1,12 @@
-"""Shared pytest fixtures and configuration for the test suite."""
+"""
+Shared fixtures and utilities for integration tests.
 
-import os
+These fixtures connect to the real Docker pgvector database and provide
+async database sessions for integration testing.
+"""
+
 import pytest
-import asyncio
+import os
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
@@ -10,42 +14,8 @@ from sqlalchemy.pool import NullPool
 from app.base_model import Base
 from app.config import settings
 from app.modules.organizations.models import Organization
-
-
-# ---------------------------------------------------------------------------
-# Set required environment variables before any app module is imported.
-# This prevents pydantic-settings from raising ValidationError at import time.
-# ---------------------------------------------------------------------------
-
-_REQUIRED_ENV = {
-    "DATABASE_HOST": "localhost",
-    "DATABASE_PORT": "5432",
-    "DATABASE_NAME": "talentkru_test",
-    "DATABASE_USER": "test_user",
-    "DATABASE_PASSWORD": "test_password",
-    "JWT_SIGNING_KEY": "test-jwt-signing-key",
-    "ENCRYPTION_KEY": "test-encryption-key",
-    "STORAGE_BACKEND": "local",
-    "AGENT_API_KEY": "test-agent-api-key",
-    "METRICS_USERNAME": "metrics_user",
-    "METRICS_PASSWORD": "metrics_password",
-}
-
-for _key, _value in _REQUIRED_ENV.items():
-    os.environ.setdefault(_key, _value)
-
-
-# ---------------------------------------------------------------------------
-# Integration Test Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+from app.modules.users.models import User
+from app.modules.rbac.models import Role
 
 
 @pytest.fixture(scope="session")
@@ -100,7 +70,6 @@ async def org_id(db_session: AsyncSession):
     org = Organization(
         organization_id=uuid4(),
         name=f"Test Org {uuid4().hex[:8]}",
-        slug=f"test-org-{uuid4().hex[:8]}",
         created_by=uuid4(),
     )
     db_session.add(org)
@@ -111,26 +80,70 @@ async def org_id(db_session: AsyncSession):
 @pytest.fixture
 async def user_id(db_session: AsyncSession, org_id):
     """Create a test user and return its ID."""
-    # Just return a UUID - we don't need to create actual User records for these tests
-    return uuid4()
+    user = User(
+        user_id=uuid4(),
+        organization_id=org_id,
+        email=f"test-{uuid4().hex[:8]}@example.com",
+        email_hash=f"hash-{uuid4().hex[:8]}",
+        password_hash="test_hash",
+        first_name="Test",
+        last_name="User",
+        created_by=uuid4(),
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user.user_id
 
 
 @pytest.fixture
 async def recruiter_user(db_session: AsyncSession, org_id):
     """Create a test user with Recruiter role."""
-    # Just return a UUID
-    return uuid4()
+    user = User(
+        user_id=uuid4(),
+        organization_id=org_id,
+        email=f"recruiter-{uuid4().hex[:8]}@example.com",
+        email_hash=f"hash-{uuid4().hex[:8]}",
+        password_hash="test_hash",
+        first_name="Recruiter",
+        last_name="User",
+        created_by=uuid4(),
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
 
 
 @pytest.fixture
 async def admin_user(db_session: AsyncSession, org_id):
     """Create a test user with Administrator role."""
-    # Just return a UUID
-    return uuid4()
+    user = User(
+        user_id=uuid4(),
+        organization_id=org_id,
+        email=f"admin-{uuid4().hex[:8]}@example.com",
+        email_hash=f"hash-{uuid4().hex[:8]}",
+        password_hash="test_hash",
+        first_name="Admin",
+        last_name="User",
+        created_by=uuid4(),
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
 
 
 @pytest.fixture
 async def hiring_manager_user(db_session: AsyncSession, org_id):
     """Create a test user with HiringManager role."""
-    # Just return a UUID
-    return uuid4()
+    user = User(
+        user_id=uuid4(),
+        organization_id=org_id,
+        email=f"hiring-{uuid4().hex[:8]}@example.com",
+        email_hash=f"hash-{uuid4().hex[:8]}",
+        password_hash="test_hash",
+        first_name="Hiring",
+        last_name="Manager",
+        created_by=uuid4(),
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user

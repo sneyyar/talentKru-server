@@ -1,16 +1,8 @@
-"""Portal ORM models."""
+"""Portal ORM models.
 
-import uuid
-from sqlalchemy import Column
-from sqlalchemy.dialects.postgresql import UUID
-from app.base_model import AuditMixin, Base
+Note: DataSubjectAccessRequest is defined in app.modules.privacy.models
+and imported from there for use in the portal module.
+"""
 
-
-class DataSubjectAccessRequest(Base, AuditMixin):
-    """Data Subject Access Request entity."""
-
-    __tablename__ = "data_subject_access_requests"
-
-    dsar_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    candidate_id = Column(UUID(as_uuid=True), nullable=False)
-    organization_id = Column(UUID(as_uuid=True), nullable=False)
+# Portal module uses DataSubjectAccessRequest from privacy.models
+# No additional models are defined here.

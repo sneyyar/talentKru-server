@@ -14,10 +14,10 @@ from app.base_model import AuditMixin, Base, VersionMixin
 
 class RequisitionStatus(str, enum.Enum):
     """Requisition status enumeration."""
-    OPEN = "open"
-    ON_HOLD = "on_hold"
-    CLOSED = "closed"
-    CANCELLED = "cancelled"
+    Open = "Open"
+    OnHold = "OnHold"
+    Closed = "Closed"
+    Cancelled = "Cancelled"
 
 
 class JobRequisition(Base, AuditMixin, VersionMixin):
@@ -37,7 +37,7 @@ class JobRequisition(Base, AuditMixin, VersionMixin):
     department = Column(String(100), nullable=False)
     location = Column(String(200), nullable=False)
     hiring_manager_user_id = Column(UUID(as_uuid=True), nullable=False)
-    status = Column(SQLEnum(RequisitionStatus), nullable=False, default=RequisitionStatus.OPEN)
+    status = Column(SQLEnum(RequisitionStatus, native_enum=True), nullable=False, default=RequisitionStatus.Open)
     description = Column(String(5000), nullable=True)
 
 

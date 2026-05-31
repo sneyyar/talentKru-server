@@ -56,11 +56,11 @@ async def test_candidate_model_creation(test_db: AsyncSession):
         email_hash=hashlib.sha256(email.lower().encode()).hexdigest(),
         phone=None,
         location=None,
-        global_status=GlobalStatus.ACTIVE,
+        global_status=GlobalStatus.Active,
     )
     
     test_db.add(candidate)
     await test_db.flush()
     
     assert candidate.candidate_id is not None
-    assert candidate.global_status == GlobalStatus.ACTIVE
+    assert candidate.global_status == GlobalStatus.Active

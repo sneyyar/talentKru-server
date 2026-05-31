@@ -113,7 +113,7 @@ class TestCandidateCreation:
             created_by=user_id,
         )
         
-        assert candidate.global_status == GlobalStatus.ACTIVE
+        assert candidate.global_status == GlobalStatus.Active
 
     @pytest.mark.asyncio
     async def test_create_candidate_email_uniqueness(
@@ -179,7 +179,7 @@ class TestCandidateCreation:
         with pytest.raises(HTTPException) as exc_info:
             await service.transition_status(
                 candidate=candidate,
-                new_status=GlobalStatus.INELIGIBLE,
+                new_status=GlobalStatus.Ineligible,
                 ineligibility_reason=None,
                 updated_by=user_id,
             )
@@ -189,7 +189,7 @@ class TestCandidateCreation:
         with pytest.raises(HTTPException) as exc_info:
             await service.transition_status(
                 candidate=candidate,
-                new_status=GlobalStatus.INELIGIBLE,
+                new_status=GlobalStatus.Ineligible,
                 ineligibility_reason="   ",
                 updated_by=user_id,
             )
@@ -198,11 +198,11 @@ class TestCandidateCreation:
         # Transition with valid reason should succeed
         updated = await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.INELIGIBLE,
+            new_status=GlobalStatus.Ineligible,
             ineligibility_reason="Does not meet requirements",
             updated_by=user_id,
         )
-        assert updated.global_status == GlobalStatus.INELIGIBLE
+        assert updated.global_status == GlobalStatus.Ineligible
         assert updated.ineligibility_reason == "Does not meet requirements"
 
     @pytest.mark.asyncio
@@ -224,7 +224,7 @@ class TestCandidateCreation:
         # INELIGIBLE cannot transition to ACTIVE
         await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.INELIGIBLE,
+            new_status=GlobalStatus.Ineligible,
             ineligibility_reason="Test reason",
             updated_by=user_id,
         )
@@ -232,7 +232,7 @@ class TestCandidateCreation:
         with pytest.raises(HTTPException) as exc_info:
             await service.transition_status(
                 candidate=candidate,
-                new_status=GlobalStatus.ACTIVE,
+                new_status=GlobalStatus.Active,
                 updated_by=user_id,
             )
         assert exc_info.value.status_code == 400
@@ -258,7 +258,7 @@ class TestCandidateCreation:
         
         await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.DELETED,
+            new_status=GlobalStatus.Deleted,
             updated_by=user_id,
         )
         
@@ -296,7 +296,7 @@ class TestCandidateCreation:
         # Delete the candidate
         await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.DELETED,
+            new_status=GlobalStatus.Deleted,
             updated_by=user_id,
         )
         
@@ -328,7 +328,7 @@ class TestCandidateCreation:
         # Delete the candidate
         await service.transition_status(
             candidate=candidate,
-            new_status=GlobalStatus.DELETED,
+            new_status=GlobalStatus.Deleted,
             updated_by=user_id,
         )
         

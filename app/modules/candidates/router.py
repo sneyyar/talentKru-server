@@ -26,6 +26,9 @@ from app.modules.candidates.schemas import (
     CandidateUpdate,
 )
 from app.modules.candidates.service import CandidateService
+from app.modules.resumes.models import Resume
+from app.modules.resumes.schemas import ResumeResponse, PaginatedResumeList
+from sqlalchemy import select, and_, func
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -36,7 +39,7 @@ router = APIRouter(prefix="/candidates", tags=["candidates"])
     status_code=status.HTTP_201_CREATED,
     operation_id="create_candidate",
     summary="Create a new candidate",
-    description="Create a new candidate profile in the organization with Active status. Requires Recruiter or Administrator role.",
+    description="Create a new candidate profile in the organization with Active status. Requires Recruiter or Administrator role. Returns 201 with candidate details.",
     responses={
         201: {"description": "Candidate created successfully", "model": CandidateResponse},
         400: {"description": "Invalid request data"},
@@ -101,7 +104,7 @@ async def create_candidate(
     status_code=status.HTTP_200_OK,
     operation_id="list_candidates",
     summary="List candidates with search and pagination",
-    description="List candidates in the organization with optional filtering by name, email, or status. Supports pagination with max 50 per page. Requires Recruiter, Administrator, or HiringManager role.",
+    description="List candidates in the organization with optional filtering by name, email, or status. Supports pagination with max 50 per page. Requires Recruiter, Administrator, or HiringManager role. Returns paginated list with total count.",
 )
 async def list_candidates(
     name: str | None = Query(
@@ -186,7 +189,7 @@ async def list_candidates(
     status_code=status.HTTP_200_OK,
     operation_id="get_candidate",
     summary="Retrieve a candidate by ID",
-    description="Retrieve a specific candidate profile by ID. Requires Recruiter, Administrator, or HiringManager role.",
+    description="Retrieve a specific candidate profile by ID. Requires Recruiter, Administrator, or HiringManager role. Returns candidate details with all fields.",
 )
 async def get_candidate(
     candidate_id: UUID,
@@ -226,7 +229,7 @@ async def get_candidate(
     status_code=status.HTTP_200_OK,
     operation_id="update_candidate",
     summary="Update candidate status and details",
-    description="Update candidate status with FSM validation and handle status transitions. Requires Recruiter or Administrator role.",
+    description="Update candidate status with FSM validation and handle status transitions. Requires Recruiter or Administrator role. Returns updated candidate details.",
 )
 async def update_candidate(
     candidate_id: UUID,
@@ -292,3 +295,89 @@ async def update_candidate(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update candidate",
         ) from e
+
+
+@router.get(
+    "/{candidate_id}/resumes",
+    response_model=PaginatedResumeList,
+    status_code=status.HTTP_200_OK,
+    operation_id="list_candidate_resumes",
+    summary="List resumes for a candidate",
+    description="List all resumes for a candidate with pagination (max 50 per page). Requires Recruiter, Administrator, or HiringManager role.",
+    responses={
+        200: {"description": "Resumes retrieved successfully", "model": PaginatedResumeList},
+        403: {"description": "Forbidden: User does not have required role"},
+        404: {"description": "Not Found: Candidate not found"},
+    },
+)
+async def list_candidate_resumes(
+    candidate_id: UUID,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(50, ge=1, le=50, description="Number of resumes per page (max 50)"),
+    principal: Principal = Depends(require_role("Recruiter", "Administrator", "HiringManager")),
+    db: AsyncSession = Depends(get_db_session),
+) -> PaginatedResumeList:
+    """
+    List resumes for a candidate.
+    
+    Requirement 2.9: Support listing resumes for a candidate with pagination.
+    Requirement 2.10: Restrict to Recruiter, Administrator, HiringManager roles.
+    
+    Requirements: 2.9, 2.10
+    """
+    # Verify candidate belongs to the same organization
+    from app.modules.candidates.models import Candidate
+    
+    candidate_result = await db.execute(
+        select(Candidate).where(
+            and_(
+                Candidate.candidate_id == candidate_id,
+                Candidate.organization_id == principal.organization_id,
+                Candidate.deleted_at.is_(None),
+            )
+        )
+    )
+    if not candidate_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate not found",
+        )
+    
+    # Count total resumes for candidate
+    count_result = await db.execute(
+        select(func.count()).select_from(Resume).where(
+            and_(
+                Resume.candidate_id == candidate_id,
+                Resume.organization_id == principal.organization_id,
+                Resume.deleted_at.is_(None),
+            )
+        )
+    )
+    total_count = count_result.scalar() or 0
+    
+    # Fetch paginated resumes
+    offset = (page - 1) * page_size
+    result = await db.execute(
+        select(Resume)
+        .where(
+            and_(
+                Resume.candidate_id == candidate_id,
+                Resume.organization_id == principal.organization_id,
+                Resume.deleted_at.is_(None),
+            )
+        )
+        .order_by(Resume.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    )
+    resumes = result.scalars().all()
+    
+    total_pages = (total_count + page_size - 1) // page_size
+    
+    return PaginatedResumeList(
+        items=[ResumeResponse.from_orm(r) for r in resumes],
+        total=total_count,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )

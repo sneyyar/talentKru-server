@@ -17,9 +17,9 @@ from app.base_model import Base
 
 
 class EventStatus(str, enum.Enum):
-    PENDING = "Pending"
-    PROCESSED = "Processed"
-    FAILED = "Failed"
+    Pending = "Pending"
+    Processed = "Processed"
+    Failed = "Failed"
 
 
 class DomainEvent(Base):
@@ -31,9 +31,9 @@ class DomainEvent(Base):
     published_at = Column(DateTime(timezone=True), nullable=False)
     processed_at = Column(DateTime(timezone=True), nullable=True)
     status = Column(
-        SQLEnum(EventStatus),
+        SQLEnum(EventStatus, native_enum=True),
         nullable=False,
-        default=EventStatus.PENDING,
+        default=EventStatus.Pending,
         index=True,
     )
     correlation_id = Column(String(64), nullable=True)

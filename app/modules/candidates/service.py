@@ -24,19 +24,21 @@ logger = get_logger(__name__)
 # Valid GlobalStatus transitions
 # Requirement 1.7: Restrict GlobalStatus transitions to valid paths
 VALID_TRANSITIONS: dict[GlobalStatus, set[GlobalStatus]] = {
-    GlobalStatus.ACTIVE: {
-        GlobalStatus.INTERVIEWING,
-        GlobalStatus.INELIGIBLE,
-        GlobalStatus.DELETED,
+    GlobalStatus.Active: {
+        GlobalStatus.Interviewing,
+        GlobalStatus.Ineligible,
+        GlobalStatus.Deleted,
+        GlobalStatus.Expired,
     },
-    GlobalStatus.INTERVIEWING: {
-        GlobalStatus.ACTIVE,
-        GlobalStatus.INELIGIBLE,
-        GlobalStatus.DELETED,
+    GlobalStatus.Interviewing: {
+        GlobalStatus.Active,
+        GlobalStatus.Ineligible,
+        GlobalStatus.Deleted,
+        GlobalStatus.Expired,
     },
-    GlobalStatus.EXPIRED: {GlobalStatus.ACTIVE, GlobalStatus.DELETED},
-    GlobalStatus.INELIGIBLE: set(),
-    GlobalStatus.DELETED: set(),
+    GlobalStatus.Expired: {GlobalStatus.Active, GlobalStatus.Deleted},
+    GlobalStatus.Ineligible: set(),
+    GlobalStatus.Deleted: set(),
 }
 
 
@@ -118,7 +120,7 @@ class CandidateService:
             email_hash=email_hash,
             phone=encrypted_phone,
             location=location,
-            global_status=GlobalStatus.ACTIVE,
+            global_status=GlobalStatus.Active,
         )
 
         self.db.add(candidate)
@@ -181,7 +183,7 @@ class CandidateService:
             )
 
         # Requirement 1.4: Enforce ineligibility_reason when transitioning to INELIGIBLE
-        if new_status == GlobalStatus.INELIGIBLE:
+        if new_status == GlobalStatus.Ineligible:
             if not ineligibility_reason or not ineligibility_reason.strip():
                 raise HTTPException(
                     status_code=400,
@@ -190,7 +192,7 @@ class CandidateService:
             candidate.ineligibility_reason = ineligibility_reason
 
         # Requirement 1.5: Set deleted_at/deleted_by when transitioning to DELETED
-        if new_status == GlobalStatus.DELETED:
+        if new_status == GlobalStatus.Deleted:
             candidate.deleted_at = datetime.now(timezone.utc)
             candidate.deleted_by = updated_by
 
@@ -357,3 +359,62 @@ class CandidateService:
             "updated_at": candidate.updated_at,
             "version": candidate.version,
         }
+
+    async def run_expiry_check(self) -> int:
+        """
+        Run candidate expiry scheduler.
+
+        Marks Active candidates with no active journeys and 90-day inactivity as Expired.
+        
+        Requirement 1.3: Identify candidates with no active InterviewJourneys
+        (OverallStatus ACTIVE or ON_HOLD) and no changes for 90 days, then set to EXPIRED.
+        
+        Returns:
+            Number of candidates marked as expired
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+        
+        # Subquery: candidates with active journeys (OverallStatus ACTIVE or ON_HOLD)
+        from app.modules.journeys.models import InterviewJourney, JourneyOverallStatus
+        
+        active_journey_subq = (
+            select(InterviewJourney.candidate_id)
+            .where(
+                and_(
+                    InterviewJourney.overall_status.in_([
+                        JourneyOverallStatus.ACTIVE,
+                        JourneyOverallStatus.ON_HOLD,
+                    ]),
+                    InterviewJourney.deleted_at.is_(None),
+                )
+            )
+            .distinct()
+        )
+        
+        # Query candidates that qualify for expiry
+        result = await self.db.execute(
+            select(Candidate).where(
+                and_(
+                    Candidate.global_status == GlobalStatus.Active,
+                    Candidate.updated_at < cutoff,
+                    Candidate.deleted_at.is_(None),
+                    ~Candidate.candidate_id.in_(active_journey_subq),
+                )
+            )
+        )
+        candidates = result.scalars().all()
+        
+        # Mark each as EXPIRED and publish event
+        for candidate in candidates:
+            candidate.global_status = GlobalStatus.EXPIRED
+            await publish_event(
+                "candidate_expired",
+                {"candidate_id": str(candidate.candidate_id)},
+                self.db,
+            )
+        
+        await self.db.flush()
+        
+        logger.info("expiry_run_complete", count=len(candidates))
+        
+        return len(candidates)

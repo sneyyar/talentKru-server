@@ -918,32 +918,95 @@ def clean(c):
     )
 
 
-@task
-def install(c):
-    """Install project dependencies."""
-    print("📦 Installing dependencies...")
-    c.run("poetry install", pty=True)
+# ============================================================================
+# Dependency Management Tasks (uv)
+# ============================================================================
 
 
 @task
-def install_dev(c):
-    """Install project dependencies including dev dependencies."""
-    print("📦 Installing dependencies (including dev)...")
-    c.run("poetry install --with dev", pty=True)
+def sync(c):
+    """Sync project dependencies using uv."""
+    print("📦 Syncing dependencies with uv...")
+    c.run("uv sync", pty=True)
 
 
 @task
-def update(c):
+def sync_no_dev(c):
+    """Sync only production dependencies (no dev)."""
+    print("📦 Syncing production dependencies...")
+    c.run("uv sync --no-dev", pty=True)
+
+
+@task(help={"package": "Package name to add"})
+def add(c, package=""):
+    """Add a new dependency using uv."""
+    if not package:
+        print("❌ Error: Package name is required")
+        print("Usage: invoke add --package package_name")
+        sys.exit(1)
+    print(f"📦 Adding package: {package}")
+    c.run(f"uv add {package}", pty=True)
+
+
+@task(help={"package": "Package name to add as dev dependency"})
+def add_dev(c, package=""):
+    """Add a new dev dependency using uv."""
+    if not package:
+        print("❌ Error: Package name is required")
+        print("Usage: invoke add-dev --package package_name")
+        sys.exit(1)
+    print(f"📦 Adding dev package: {package}")
+    c.run(f"uv add --dev {package}", pty=True)
+
+
+@task
+def lock_upgrade(c):
     """Update all dependencies to latest versions."""
-    print("🔄 Updating dependencies...")
-    c.run("poetry update", pty=True)
+    print("🔄 Upgrading dependencies...")
+    c.run("uv lock --upgrade", pty=True)
+
+
+@task
+def lock_refresh(c):
+    """Refresh lock file without upgrading versions."""
+    print("🔄 Refreshing lock file...")
+    c.run("uv lock", pty=True)
+
+
+@task
+def cache_clean(c):
+    """Clean uv cache."""
+    print("🧹 Cleaning uv cache...")
+    c.run("uv cache clean", pty=True)
 
 
 @task
 def show_deps(c):
     """Show all installed dependencies."""
     print("📚 Installed dependencies:")
-    c.run("poetry show", pty=True)
+    c.run("uv pip list", pty=True)
+
+
+# Legacy aliases for backwards compatibility
+@task
+def install(c):
+    """Install project dependencies (alias for sync)."""
+    print("📦 Installing dependencies...")
+    sync(c)
+
+
+@task
+def install_dev(c):
+    """Install project dependencies including dev (alias for sync)."""
+    print("📦 Installing dependencies (including dev)...")
+    sync(c)
+
+
+@task
+def update(c):
+    """Update all dependencies (alias for lock-upgrade)."""
+    print("🔄 Updating dependencies...")
+    lock_upgrade(c)
 
 
 # ============================================================================
@@ -1002,6 +1065,16 @@ def docs(c):
     print("=" * 80 + "\n")
 
     tasks_info = {
+        "Dependency Management (uv)": [
+            ("sync", "Sync all dependencies (including dev)"),
+            ("sync-no-dev", "Sync only production dependencies"),
+            ("add --package PKG", "Add a new dependency"),
+            ("add-dev --package PKG", "Add a new dev dependency"),
+            ("lock-upgrade", "Upgrade all dependencies to latest"),
+            ("lock-refresh", "Refresh lock file"),
+            ("cache-clean", "Clean uv cache"),
+            ("show-deps", "Show all installed dependencies"),
+        ],
         "Development": [
             ("dev [--port PORT]", "Start FastAPI dev server with auto-reload"),
             ("dev-quiet", "Start dev server in quiet mode"),
@@ -1038,10 +1111,6 @@ def docs(c):
         ],
         "Utilities": [
             ("clean", "Clean cache files"),
-            ("install", "Install dependencies"),
-            ("install-dev", "Install dev dependencies"),
-            ("update", "Update dependencies"),
-            ("show-deps", "Show installed dependencies"),
         ],
         "Workflows": [
             ("setup", "Complete setup (install, DB, migrations)"),
@@ -1059,11 +1128,12 @@ def docs(c):
 
     print("\n" + "=" * 80)
     print("Examples:")
-    print("  invoke dev                    # Start development server")
-    print("  invoke test                   # Run all tests")
-    print("  invoke check                  # Run all checks")
-    print("  invoke db-start               # Start PostgreSQL")
-    print("  invoke dev-setup              # Setup development environment")
+    print("  uv run invoke sync                # Sync dependencies")
+    print("  uv run invoke dev                 # Start development server")
+    print("  uv run invoke test                # Run all tests")
+    print("  uv run invoke check               # Run all checks")
+    print("  uv run invoke db-start            # Start PostgreSQL")
+    print("  uv run invoke dev-setup           # Setup development environment")
     print("=" * 80 + "\n")
 
 
@@ -1073,6 +1143,15 @@ def docs(c):
 
 # Create namespace for better organization
 ns = Collection()
+
+# Dependency Management (uv)
+ns.add_task(sync)
+ns.add_task(sync_no_dev, name="sync-no-dev")
+ns.add_task(add)
+ns.add_task(add_dev, name="add-dev")
+ns.add_task(lock_upgrade, name="lock-upgrade")
+ns.add_task(lock_refresh, name="lock-refresh")
+ns.add_task(cache_clean, name="cache-clean")
 
 # Development
 ns.add_task(dev)

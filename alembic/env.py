@@ -26,27 +26,28 @@ if config.config_file_name is not None:
 from app.base_model import Base  # noqa: E402
 from app.config import settings  # noqa: E402
 
-# Module model stubs — imported for their side-effect of registering ORM models
-# with Base.metadata.  Each module will add a models.py as it is implemented.
-import app.modules.organizations  # noqa: F401, E402
-import app.modules.candidates  # noqa: F401, E402
-import app.modules.resumes  # noqa: F401, E402
-import app.modules.requisitions  # noqa: F401, E402
-import app.modules.job_profile  # noqa: F401, E402
-import app.modules.job_posting  # noqa: F401, E402
-import app.modules.skills  # noqa: F401, E402
-import app.modules.matching  # noqa: F401, E402
-import app.modules.journeys  # noqa: F401, E402
-import app.modules.interviews  # noqa: F401, E402
-import app.modules.questionnaires  # noqa: F401, E402
-import app.modules.portal  # noqa: F401, E402
-import app.modules.privacy  # noqa: F401, E402
-import app.modules.agents  # noqa: F401, E402
-import app.modules.reporting  # noqa: F401, E402
-import app.modules.auth  # noqa: F401, E402
-import app.modules.rbac  # noqa: F401, E402
-import app.modules.users  # noqa: F401, E402
-import app.domain_events  # noqa: F401, E402
+# Module model imports — imported for their side-effect of registering ORM models
+# with Base.metadata. Each module's models.py is explicitly imported to ensure
+# all ORM classes are registered before Alembic autogenerate runs.
+from app.modules.organizations.models import *  # noqa: F401, E402, F403
+from app.modules.candidates.models import *  # noqa: F401, E402, F403
+from app.modules.resumes.models import *  # noqa: F401, E402, F403
+from app.modules.requisitions.models import *  # noqa: F401, E402, F403
+from app.modules.job_profile.models import *  # noqa: F401, E402, F403
+from app.modules.job_posting.models import *  # noqa: F401, E402, F403
+from app.modules.skills.models import *  # noqa: F401, E402, F403
+from app.modules.journeys.models import *  # noqa: F401, E402, F403
+from app.modules.interviews.models import *  # noqa: F401, E402, F403
+from app.modules.questionnaires.models import *  # noqa: F401, E402, F403
+from app.modules.portal.models import *  # noqa: F401, E402, F403
+from app.modules.privacy.models import *  # noqa: F401, E402, F403
+from app.modules.reporting.models import *  # noqa: F401, E402, F403
+from app.modules.auth.models import *  # noqa: F401, E402, F403
+from app.modules.rbac.models import *  # noqa: F401, E402, F403
+from app.modules.users.models import *  # noqa: F401, E402, F403
+from app.modules.invitations.models import *  # noqa: F401, E402, F403
+from app.modules.password_reset.models import *  # noqa: F401, E402, F403
+from app.domain_events.models import *  # noqa: F401, E402, F403
 
 target_metadata = Base.metadata
 

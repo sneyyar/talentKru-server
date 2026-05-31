@@ -51,7 +51,7 @@ def upgrade() -> None:
         sa.Column('email_hash', sa.String(64), nullable=False),
         sa.Column('phone', sa.String(200), nullable=True),
         sa.Column('location', sa.String(200), nullable=True),
-        sa.Column('global_status', sa.String(20), nullable=False, server_default='Active'),
+        sa.Column('global_status', sa.Enum('Active', 'Interviewing', 'Expired', 'Ineligible', 'Deleted', name='globalstatus'), nullable=False, server_default='Active'),
         sa.Column('ineligibility_reason', sa.String(1000), nullable=True),
         sa.Column('version', sa.Integer(), nullable=False, server_default='1'),
         sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
@@ -81,7 +81,7 @@ def upgrade() -> None:
         sa.Column('file_size_bytes', sa.Integer(), nullable=False),
         sa.Column('uploaded_by_user_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('is_primary', sa.Boolean(), nullable=False, server_default='false'),
-        sa.Column('parse_status', sa.String(16), nullable=False, server_default='Pending'),
+        sa.Column('parse_status', sa.Enum('Pending', 'Completed', 'Failed', name='parsestatus'), nullable=False, server_default='Pending'),
         sa.Column('parsed_data', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column('version', sa.Integer(), nullable=False, server_default='1'),
         sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
@@ -169,7 +169,7 @@ def upgrade() -> None:
         sa.Column('skill_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('proficiency_rank', sa.Integer(), nullable=False),
         sa.Column('years_of_experience', sa.Integer(), nullable=False),
-        sa.Column('source', sa.String(20), nullable=False, server_default='manual'),
+        sa.Column('source', sa.Enum('Manual', 'Parsed', 'Inferred', name='skillsource'), nullable=False, server_default='Manual'),
         sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('updated_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('deleted_at', postgresql.TIMESTAMP(timezone=True), nullable=True),
@@ -229,7 +229,7 @@ def upgrade() -> None:
         sa.Column('job_profile_skill_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('job_profile_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('skill_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('designation', sa.String(20), nullable=False, server_default='required'),
+        sa.Column('designation', sa.Enum('Required', 'Desired', name='skilldesignation'), nullable=False, server_default='Required'),
         sa.Column('required_proficiency_rank', sa.Integer(), nullable=False),
         sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('updated_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
@@ -283,7 +283,7 @@ def upgrade() -> None:
         sa.Column('department', sa.String(100), nullable=False),
         sa.Column('location', sa.String(200), nullable=False),
         sa.Column('hiring_manager_user_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('status', sa.String(20), nullable=False, server_default='open'),
+        sa.Column('status', sa.Enum('Open', 'OnHold', 'Closed', 'Cancelled', name='requisitionstatus'), nullable=False, server_default='Open'),
         sa.Column('description', sa.String(5000), nullable=True),
         sa.Column('version', sa.Integer(), nullable=False, server_default='1'),
         sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
@@ -350,8 +350,8 @@ def upgrade() -> None:
         sa.Column('dsar_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('candidate_id', postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('organization_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('request_type', sa.String(20), nullable=False),
-        sa.Column('status', sa.String(20), nullable=False, server_default='pending'),
+        sa.Column('request_type', sa.Enum('Access', 'Erasure', name='dsarrequesttype'), nullable=False),
+        sa.Column('status', sa.Enum('Pending', 'Completed', 'Denied', name='dsarstatus'), nullable=False, server_default='Pending'),
         sa.Column('requested_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('completed_at', postgresql.TIMESTAMP(timezone=True), nullable=True),
         sa.Column('denial_reason', sa.String(1000), nullable=True),
@@ -407,3 +407,11 @@ def downgrade() -> None:
     op.drop_index('idx_candidates_name_hash', table_name='candidates')
     op.drop_index('idx_candidates_org_status', table_name='candidates')
     op.drop_table('candidates')
+    
+    # Drop enum types
+    op.execute("DROP TYPE IF EXISTS skilldesignation")
+    op.execute("DROP TYPE IF EXISTS dsarstatus")
+    op.execute("DROP TYPE IF EXISTS dsarrequesttype")
+    op.execute("DROP TYPE IF EXISTS requisitionstatus")
+    op.execute("DROP TYPE IF EXISTS parsestatus")
+    op.execute("DROP TYPE IF EXISTS globalstatus")

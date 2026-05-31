@@ -100,7 +100,7 @@ class CandidateSkill(Base, AuditMixin):
     proficiency_rank = Column(Integer, nullable=False)
     years_of_experience = Column(Integer, nullable=False)
     source = Column(
-        SQLEnum(SkillSource),
+        SQLEnum(SkillSource, native_enum=True),
         nullable=False,
         default=SkillSource.MANUAL,
     )

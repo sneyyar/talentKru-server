@@ -9,16 +9,16 @@ from app.base_model import AuditMixin, Base
 
 class DSARRequestType(str, enum.Enum):
     """Data Subject Access Request type enumeration."""
-    ACCESS = "access"
-    ERASURE = "erasure"
+    Access = "Access"
+    Erasure = "Erasure"
 
 
 class DSARStatus(str, enum.Enum):
     """Data Subject Access Request status enumeration."""
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    DENIED = "denied"
+    Pending = "Pending"
+    Processing = "Processing"
+    Completed = "Completed"
+    Denied = "Denied"
 
 
 class DataSubjectAccessRequest(Base, AuditMixin):
@@ -29,8 +29,8 @@ class DataSubjectAccessRequest(Base, AuditMixin):
     dsar_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     candidate_id = Column(UUID(as_uuid=True), nullable=False)
     organization_id = Column(UUID(as_uuid=True), nullable=False)
-    request_type = Column(SQLEnum(DSARRequestType), nullable=False)
-    status = Column(SQLEnum(DSARStatus), nullable=False, default=DSARStatus.PENDING)
+    request_type = Column(SQLEnum(DSARRequestType, native_enum=True), nullable=False)
+    status = Column(SQLEnum(DSARStatus, native_enum=True), nullable=False, default=DSARStatus.Pending)
     requested_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     denial_reason = Column(String(1000), nullable=True)

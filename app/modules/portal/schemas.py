@@ -8,9 +8,9 @@ from typing import Optional, Literal
 
 class DSARCreateRequest(BaseModel):
     """Schema for creating a Data Subject Access Request."""
-    request_type: Literal["Access", "Erasure"] = Field(
+    request_type: Literal["access", "erasure"] = Field(
         ...,
-        description="Type of data subject access request: Access to retrieve personal data or Erasure to delete personal data"
+        description="Type of data subject access request: access to retrieve personal data or erasure to delete personal data"
     )
 
 
@@ -22,7 +22,7 @@ class DSARResponse(BaseModel):
     )
     status: str = Field(
         ...,
-        description="Current status of the DSAR: Pending, Processing, Completed, or Denied"
+        description="Current status of the DSAR: pending, processing, completed, or denied"
     )
     requested_at: datetime = Field(
         ...,

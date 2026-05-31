@@ -90,7 +90,7 @@ class JobProfileSkill(Base, AuditMixin):
     
     # Designation: required or desired
     designation = Column(
-        SQLEnum(SkillDesignation),
+        SQLEnum(SkillDesignation, native_enum=True),
         nullable=False,
         default=SkillDesignation.REQUIRED,
     )

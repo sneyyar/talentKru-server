@@ -106,7 +106,7 @@ This implementation verifies 19 correctness properties:
     - _Requirements: 6.1, 6.6, 6.7_
 
 
-- [ ] 4. Implement CandidateService and candidate router
+- [x] 4. Implement CandidateService and candidate router
   - [x] 4.1 Implement `CandidateService` in `app/modules/candidates/service.py`
     - `create_candidate`: compute `email_hash = SHA-256(lower(email))` and `name_hash = SHA-256(lower(name))`; encrypt name, email, phone via `encrypt_field`; check `(org_id, email_hash)` uniqueness (409 on conflict); set `global_status=ACTIVE`; `db.add(candidate)`; `await db.flush()`; call `publish_event("candidate_created", ...)`
     - `transition_status`: validate transition against `VALID_TRANSITIONS` dict (400 on invalid); enforce `ineligibility_reason` non-whitespace when transitioning to INELIGIBLE (400 if missing); set `deleted_at`/`deleted_by` when transitioning to DELETED; call `publish_event("candidate_status_changed", ...)`
@@ -138,7 +138,7 @@ This implementation verifies 19 correctness properties:
     - Use `@given(name=st.text(min_size=1, max_size=100), email=st.emails())` with `max_examples=100`
     - After DELETED transition: search by name and email returns no results for that candidate; raw DB fetch returns record with `deleted_at` set
 
-  - [ ] 4.6 Implement candidate router in `app/modules/candidates/router.py`
+  - [x] 4.6 Implement candidate router in `app/modules/candidates/router.py`
     - `POST /api/v1/candidates` — `require_role("Recruiter", "Administrator")`; returns 201
     - `GET /api/v1/candidates` — `require_role("Recruiter", "Administrator", "HiringManager")`; paginated search
     - `GET /api/v1/candidates/{candidate_id}` — `require_role("Recruiter", "Administrator", "HiringManager")`
@@ -147,7 +147,7 @@ This implementation verifies 19 correctness properties:
     - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6, 1.7, 1.8_
 
 
-- [ ] 5. Implement resume storage backends and upload service
+- [x] 5. Implement resume storage backends and upload service
   - [x] 5.1 Implement `StorageService`, `LocalStorageBackend`, and `S3StorageBackend` in `app/modules/resumes/storage.py`
     - Define `ALLOWED_MIME_TYPES` set and `MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024`
     - `LocalStorageBackend.store`: create `{base_path}/{org_id}/` directory; write `{uuid4()}_{filename}`; return `local://{path}`
@@ -163,7 +163,7 @@ This implementation verifies 19 correctness properties:
     - Use `@given(mime_type=st.text(min_size=1, max_size=100), file_size=st.integers(min_value=1, max_value=20*1024*1024))` with `max_examples=200`
     - Invalid MIME type or size > 10 MB → `validate_file` raises HTTPException 422; valid MIME + size ≤ 10 MB → no exception
 
-  - [ ] 5.3 Implement `ResumeService.upload_resume` in `app/modules/resumes/service.py`
+  - [x] 5.3 Implement `ResumeService.upload_resume` in `app/modules/resumes/service.py`
     - Call `validate_file(mime_type, len(file_bytes))` (422 on failure)
     - Call `await self.storage.store(file_bytes, filename, org_id)` to get `storage_uri`
     - Insert `Resume` record with `parse_status=PENDING`; `await db.flush()`
@@ -171,15 +171,15 @@ This implementation verifies 19 correctness properties:
     - Return resume record with 202 status
     - _Requirements: 2.2, 2.3, 2.4, 2.5_
 
-  - [ ] 5.4 Implement resume router in `app/modules/resumes/router.py`
+  - [x] 5.4 Implement resume router in `app/modules/resumes/router.py`
     - `POST /api/v1/resumes/upload` — `require_role("Recruiter", "Administrator")`; accepts `multipart/form-data`; returns 202
     - `GET /api/v1/candidates/{candidate_id}/resumes` — `require_role("Recruiter", "Administrator", "HiringManager")`; paginated
     - `GET /api/v1/resumes/{resume_id}` — `require_role("Recruiter", "Administrator", "HiringManager")`
     - _Requirements: 2.2, 2.9, 2.10_
 
 
-- [ ] 6. Implement resume ingestion background task
-  - [ ] 6.1 Implement `_run_ingestion` and `_apply_ingestion_results` in `app/modules/resumes/service.py`
+- [x] 6. Implement resume ingestion background task
+  - [x] 6.1 Implement `_run_ingestion` and `_apply_ingestion_results` in `app/modules/resumes/service.py`
     - `_run_ingestion`: open new `AsyncSessionFactory` session; fetch `Resume` by `resume_id`; POST to `http://localhost:8000/internal/agents/resume-ingestion` with `X-Agent-API-Key` and `X-Correlation-ID` headers; on success call `_apply_ingestion_results` and set `parse_status=COMPLETED`; on any exception set `parse_status=FAILED` and log ERROR with `resume_id`, `correlation_id`; always `await db.commit()`
     - `_apply_ingestion_results`: call `CandidateService.upsert_candidate(extracted_data, org_id, db)` to create/update Candidate; insert `CandidateJobHistory` records for each job history entry; call `SkillService.match_and_link_skills(candidate_id, org_id, skills, db)`; associate resume with candidate; all within the same session
     - _Requirements: 2.5, 2.6, 2.8_
@@ -197,10 +197,10 @@ This implementation verifies 19 correctness properties:
     - Successful ingestion with N job history entries and M skills → exactly N `CandidateJobHistory` records and ≤M `CandidateSkill` records created within the same transaction; `parse_status=COMPLETED`
 
 
-- [ ] 7. Checkpoint — candidate and resume pipeline working
+- [x] 7. Checkpoint — candidate and resume pipeline working
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 8. Implement skills taxonomy service and router
+- [x] 8. Implement skills taxonomy service and router
   - [x] 8.1 Implement `SkillService` in `app/modules/skills/service.py`
     - `create_domain`: check name uniqueness (409 on conflict); insert `Domain`; return
     - `create_skill`: check `(domain_id, name)` uniqueness (409 on conflict); insert `Skill`; return
@@ -220,7 +220,7 @@ This implementation verifies 19 correctness properties:
     - Use `@given(skill_names=st.lists(st.text(min_size=1, max_size=50), min_size=0, max_size=10))` with `max_examples=100`
     - All skill names are non-existent in taxonomy; `match_and_link_skills` completes without exception; `UnmatchedSkillReview` records created for each non-empty name; empty list → no records created
 
-  - [ ] 8.4 Implement skills router in `app/modules/skills/router.py`
+  - [x] 8.4 Implement skills router in `app/modules/skills/router.py`
     - `GET /api/v1/domains`, `POST /api/v1/domains` — `require_role("Recruiter", "Administrator")`
     - `GET /api/v1/domains/{domain_id}/skills`, `POST /api/v1/domains/{domain_id}/skills` — `require_role("Recruiter", "Administrator")`
     - `GET /api/v1/candidates/{candidate_id}/skills`, `POST /api/v1/candidates/{candidate_id}/skills` — `require_role("Recruiter", "Administrator", "HiringManager")`
@@ -228,7 +228,7 @@ This implementation verifies 19 correctness properties:
     - _Requirements: 3.1, 3.2, 3.3_
 
 
-- [ ] 9. Implement JobProfile service and router
+- [x] 9. Implement JobProfile service and router
   - [x] 9.1 Implement `JobProfileService` in `app/modules/job_profile/service.py`
     - `create_job_profile(org_id, name, skills, created_by)`: insert `JobProfile`; for each skill entry insert `JobProfileSkill(designation, required_proficiency_rank)`; `await db.flush()`; return
     - `update_job_profile`: update name and skill associations; use `VersionMixin` optimistic locking (409 on `StaleDataError`)
@@ -236,13 +236,13 @@ This implementation verifies 19 correctness properties:
     - `get_job_profile` / `list_job_profiles`: org-scoped queries filtering `deleted_at IS NULL`
     - _Requirements: 4.1_
 
-  - [ ] 9.2 Implement job profile router in `app/modules/job_profile/router.py`
+  - [x] 9.2 Implement job profile router in `app/modules/job_profile/router.py`
     - `POST /api/v1/job-profiles` — `require_role("Recruiter")`; returns 201
     - `GET /api/v1/job-profiles`, `GET /api/v1/job-profiles/{job_profile_id}` — `require_role("Recruiter", "Administrator", "HiringManager")`
     - `PATCH /api/v1/job-profiles/{job_profile_id}`, `DELETE /api/v1/job-profiles/{job_profile_id}` — `require_role("Recruiter")`; 403 for any other role
     - _Requirements: 4.1, 4.6_
 
-- [ ] 10. Implement JobPosting service and router
+- [x] 10. Implement JobPosting service and router
   - [x] 10.1 Implement `JobPostingService` in `app/modules/job_posting/service.py`
     - `create_posting`: validate `job_profile_id` exists, belongs to org, and `deleted_at IS NULL` (400 if invalid); insert `JobPosting`; `await db.flush()`; return
     - `list_postings`: org-scoped query; apply location filter (`work_locations.any(location)`); apply salary overlap filter (`salary_min <= filter_max AND salary_max >= filter_min`) when both filter values provided; apply `sourcing_channel` exact match; paginated with offset/limit
@@ -261,7 +261,7 @@ This implementation verifies 19 correctness properties:
     - Use `@given(postings=st.lists(st.fixed_dictionaries({"salary_min": st.floats(0, 200000), "salary_max": st.floats(0, 200000)}), min_size=1, max_size=20), filter_min=st.floats(0, 200000), filter_max=st.floats(0, 200000))` with `assume(filter_min <= filter_max)` and `max_examples=100`
     - All returned postings satisfy `posting.salary_min <= filter_max AND posting.salary_max >= filter_min`; no non-overlapping posting appears in results
 
-  - [ ] 10.4 Implement job posting router in `app/modules/job_posting/router.py`
+  - [x] 10.4 Implement job posting router in `app/modules/job_posting/router.py`
     - `POST /api/v1/job-postings` — `require_role("Recruiter")`; returns 201
     - `GET /api/v1/job-postings` — `require_role("Recruiter", "Administrator", "HiringManager")`; accepts filter query params
     - `GET /api/v1/job-postings/{job_posting_id}` — `require_role("Recruiter", "Administrator", "HiringManager")`
@@ -269,11 +269,11 @@ This implementation verifies 19 correctness properties:
     - _Requirements: 4.2, 4.5, 4.6_
 
 
-- [ ] 11. Checkpoint — skills, job profiles, and job postings working
+- [x] 11. Checkpoint — skills, job profiles, and job postings working
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Implement RequisitionService and requisition router
-  - [ ] 12.1 Implement `RequisitionService` in `app/modules/requisitions/service.py`
+- [x] 12. Implement RequisitionService and requisition router
+  - [x] 12.1 Implement `RequisitionService` in `app/modules/requisitions/service.py`
     - `create_requisition`: set `status=OPEN` regardless of any value in the request body; insert `JobRequisition`; `await db.flush()`; call `publish_event("requisition_status_changed", ...)`; return
     - `transition_status`: validate against `VALID_REQUISITION_TRANSITIONS` dict (400 on invalid); update `status`; `await db.flush()`; call `publish_event("requisition_status_changed", ...)`
     - `associate_candidate`: validate `requisition.status == OPEN` (400 if not); validate `candidate.global_status in (ACTIVE, INTERVIEWING)` (400 if not); check duplicate `CandidateRequisition` (409 if exists); insert `CandidateRequisition`; `await db.flush()`
@@ -293,7 +293,7 @@ This implementation verifies 19 correctness properties:
     - Use `@given(from_status=st.sampled_from(list(RequisitionStatus)), to_status=st.sampled_from(list(RequisitionStatus)))` with `max_examples=100`
     - Creation always sets `status=OPEN`; valid update transitions succeed; invalid transitions → HTTPException 400
 
-  - [ ] 12.4 Implement requisition router in `app/modules/requisitions/router.py`
+  - [x] 12.4 Implement requisition router in `app/modules/requisitions/router.py`
     - `POST /api/v1/requisitions` — `require_role("Recruiter", "Administrator")`; returns 201
     - `GET /api/v1/requisitions`, `GET /api/v1/requisitions/{requisition_id}` — `require_role("Recruiter", "Administrator", "HiringManager")`
     - `PATCH /api/v1/requisitions/{requisition_id}` — `require_role("Recruiter", "Administrator")`
@@ -302,39 +302,39 @@ This implementation verifies 19 correctness properties:
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
 
-- [ ] 13. Implement portal DSAR endpoint and privacy service
-  - [ ] 13.1 Implement portal DSAR creation in `app/modules/portal/service.py` and `router.py`
+- [x] 13. Implement portal DSAR endpoint and privacy service
+  - [x] 13.1 Implement portal DSAR creation in `app/modules/portal/service.py` and `router.py`
     - `PortalService.create_dsar(candidate_id, org_id, request_type)`: insert `DataSubjectAccessRequest(status=PENDING, requested_at=now())`; `await db.flush()`; return
     - `POST /api/v1/portal/dsar` — authenticated candidates only (any role); returns 201 with `dsar_id` and `status=Pending`
     - Endpoint must remain permanently accessible; no role restriction beyond valid JWT
     - _Requirements: 6.1_
 
-  - [ ] 13.2 Implement `PrivacyService` DSAR management in `app/modules/privacy/service.py`
+  - [x] 13.2 Implement `PrivacyService` DSAR management in `app/modules/privacy/service.py`
     - `process_access_dsar(dsar)`: guard `dsar.request_type == ACCESS` (400 if not); compile candidate profile, job history, skills, questionnaire responses, availability slots, and journey metadata; set `dsar.status=COMPLETED`, `dsar.completed_at=now()`; `await db.flush()`; return compiled dict
     - `process_erasure_dsar(dsar)`: hard-delete `Resume` records for `candidate_id`; hard-delete `Candidate` record; anonymize `AuditLog` entries (set `candidate_id=None`, `anonymized=True`, `anonymized_placeholder="ANONYMIZED"`); set `dsar.status=COMPLETED`, `dsar.completed_at=now()`; `await db.flush()`
     - `deny_dsar(dsar, denial_reason, denied_by)`: validate `len(denial_reason.strip()) >= 10` (400 if not); set `dsar.status=DENIED`, `dsar.denial_reason=denial_reason`; write audit log entry with `denied_by`; `await db.flush()`
     - `list_dsars(org_id, status, page, page_size)`: org-scoped paginated query
     - _Requirements: 6.2, 6.3, 6.6, 6.7_
 
-  - [ ]* 13.3 Write property test for DSAR Access workflow isolation (Property 14)
+  - [x] 13.3 Write property test for DSAR Access workflow isolation (Property 14)
     - **Property 14: DSAR Access workflow only triggered for RequestType=Access**
     - **Validates: Requirements 6.2**
     - Use `@given(request_type=st.sampled_from(list(DSARRequestType)))` with `max_examples=100`
     - `request_type != ACCESS` → `process_access_dsar` raises HTTPException 400; no data compiled; `request_type == ACCESS` → data compiled and returned
 
-  - [ ]* 13.4 Write property test for DSAR Erasure hard-deleting personal data (Property 15)
+  - [x] 13.4 Write property test for DSAR Erasure hard-deleting personal data (Property 15)
     - **Property 15: DSAR Erasure hard-deletes personal data and anonymizes audit trail**
     - **Validates: Requirements 6.3**
     - Use `@given(resume_count=st.integers(min_value=0, max_value=5))` with `max_examples=100`
     - After `process_erasure_dsar`: candidate record absent from DB; all resume records absent; audit log entries for candidate have `anonymized=True`; `dsar.status=COMPLETED`
 
-  - [ ]* 13.5 Write property test for DSAR denial requiring minimum-length reason (Property 19)
+  - [x] 13.5 Write property test for DSAR denial requiring minimum-length reason (Property 19)
     - **Property 19: DSAR denial requires minimum-length reason**
     - **Validates: Requirements 6.7**
     - Use `@given(reason=st.one_of(st.none(), st.just(""), st.text(max_size=9)))` with `max_examples=100`
     - Short/absent reason → HTTPException 400; DSAR status unchanged; valid reason (≥10 chars) → denial recorded in audit log
 
-  - [ ] 13.6 Implement privacy management router in `app/modules/privacy/router.py`
+  - [x] 13.6 Implement privacy management router in `app/modules/privacy/router.py`
     - `GET /api/v1/dsar` — `require_role("Administrator", "HRManager")`; paginated list
     - `PATCH /api/v1/dsar/{dsar_id}` — `require_role("Administrator", "HRManager")`; process Access or Erasure based on `request_type`
     - `POST /api/v1/dsar/{dsar_id}/deny` — `require_role("Administrator", "HRManager")`; requires `denial_reason`
@@ -343,8 +343,8 @@ This implementation verifies 19 correctness properties:
     - _Requirements: 6.2, 6.3, 6.6, 6.7_
 
 
-- [ ] 14. Implement background schedulers
-  - [ ] 14.1 Implement `CandidateService.run_expiry_check` in `app/modules/candidates/service.py`
+- [x] 14. Implement background schedulers
+  - [x] 14.1 Implement `CandidateService.run_expiry_check` in `app/modules/candidates/service.py`
     - Compute `cutoff = now() - timedelta(days=90)`
     - Build subquery for candidates with active `InterviewJourney` (OverallStatus ACTIVE or ON_HOLD, `deleted_at IS NULL`)
     - Query `Candidate WHERE global_status=ACTIVE AND updated_at < cutoff AND deleted_at IS NULL AND candidate_id NOT IN (active_journey_subq)`
@@ -359,7 +359,7 @@ This implementation verifies 19 correctness properties:
     - Backdate `updated_at` by `days_since_update`; optionally create active journey; run `run_expiry_check()`
     - `days_since_update >= 90 AND NOT has_active_journey` → `global_status=EXPIRED`; otherwise → `global_status=ACTIVE`
 
-  - [ ] 14.3 Implement `PrivacyService.run_retention_purge` in `app/modules/privacy/service.py`
+  - [x] 14.3 Implement `PrivacyService.run_retention_purge` in `app/modules/privacy/service.py`
     - Query all `OrganizationRetentionPolicy` records
     - For each policy: compute `candidate_cutoff = now() - timedelta(days=policy.candidate_data_retention_days)` and `resume_cutoff = now() - timedelta(days=policy.resume_retention_days)`
     - Hard-delete `Resume` records where `organization_id == policy.organization_id AND created_at < resume_cutoff`; log INFO `retention_purge_resume` per record
@@ -374,15 +374,15 @@ This implementation verifies 19 correctness properties:
     - Create candidate/resume with `created_at` backdated by `age_days`; configure policy with `retention_days`; run `run_retention_purge()`
     - `age_days > retention_days` → record purged and logged; `age_days <= retention_days` → record preserved
 
-  - [ ] 14.5 Register expiry and retention schedulers in `app/main.py` lifespan
+  - [x] 14.5 Register expiry and retention schedulers in `app/main.py` lifespan
     - Add `asyncio.create_task(_run_expiry_scheduler())` and `asyncio.create_task(_run_retention_scheduler())` in the lifespan `asynccontextmanager`
     - Each scheduler loops `asyncio.sleep(24 * 3600)` then opens a new `AsyncSessionFactory` session, calls the service method, and commits
     - Cancel both tasks on shutdown
     - _Requirements: 1.3, 6.5_
 
 
-- [ ] 15. Implement role-based access enforcement and wire all modules
-  - [ ] 15.1 Verify `require_role()` guards on all protected endpoints
+- [x] 15. Implement role-based access enforcement and wire all modules
+  - [x] 15.1 Verify `require_role()` guards on all protected endpoints
     - Audit every router in `candidates`, `resumes`, `skills`, `job_profile`, `job_posting`, `requisitions`, `portal`, `privacy` to confirm `require_role()` dependencies are applied per the authorization matrix in the design
     - Ensure `POST /api/v1/portal/dsar` has no role restriction beyond valid JWT
     - Ensure DSAR management endpoints (`GET /dsar`, `PATCH /dsar/{id}`, `POST /dsar/{id}/deny`) are restricted to `Administrator` or `HRManager`
@@ -394,18 +394,18 @@ This implementation verifies 19 correctness properties:
     - Use `@given(role=st.sampled_from(["SuperAdministrator", "Administrator", "Recruiter", "HiringManager", "CommitteeMember", "HRManager", "Interviewer"]))` with `max_examples=100`
     - Non-Recruiter → `POST /job-profiles` returns 403; non-Recruiter/Administrator → `POST /resumes/upload` returns 403; non-Recruiter/Administrator/HiringManager → `GET /resumes` returns 403; non-Administrator/HRManager → `GET /dsar` returns 403
 
-  - [ ] 15.3 Register all candidate-lifecycle routers in `app/main.py`
+  - [x] 15.3 Register all candidate-lifecycle routers in `app/main.py`
     - Include `candidates`, `resumes`, `skills`, `job_profile`, `job_posting`, `requisitions`, `portal`, `privacy` routers under `/api/v1` prefix
     - Ensure `POST /api/v1/portal/dsar` is not excluded from JWT auth (candidates must be authenticated)
     - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1_
 
-  - [ ] 15.4 Add Alembic `env.py` imports for all candidate-lifecycle models
+  - [x] 15.4 Add Alembic `env.py` imports for all candidate-lifecycle models
     - Import all 13 model modules in `alembic/env.py` so `Base.metadata` includes all tables
     - Verify `alembic check` reports no missing migrations
     - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 6.4_
 
 
-- [ ] 16. Checkpoint — all modules wired and role guards verified
+- [x] 16. Checkpoint — all modules wired and role guards verified
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 17. Write integration and smoke tests
@@ -445,7 +445,7 @@ This implementation verifies 19 correctness properties:
     - Expiry and retention schedulers start without error on application startup
     - _Requirements: 1.1, 2.4, 6.4_
 
-- [ ] 18. Final checkpoint — Ensure all tests pass
+- [x] 18. Final checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 

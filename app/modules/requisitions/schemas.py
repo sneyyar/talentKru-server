@@ -48,3 +48,10 @@ class RequisitionResponse(BaseModel):
 class CandidateAssociationRequest(BaseModel):
     """Schema for associating a candidate with a requisition."""
     candidate_id: UUID = Field(..., description="Unique identifier of the candidate")
+
+
+class RequiredSkillCreate(BaseModel):
+    """Schema for adding a required skill to a requisition."""
+    skill_id: UUID = Field(..., description="Unique identifier of the skill")
+    required_proficiency_rank: int = Field(..., ge=1, le=5, description="Required proficiency rank (1-5)")
+    weight: int = Field(..., ge=1, le=10, description="Weight of the skill (1-10)")

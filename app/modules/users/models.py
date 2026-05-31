@@ -59,7 +59,7 @@ class User(Base, AuditMixin, VersionMixin):
 
     # Account status
     status = Column(
-        SQLEnum(UserStatus),
+        SQLEnum(UserStatus, native_enum=True),
         nullable=False,
         default=UserStatus.PENDING_INVITATION,
     )

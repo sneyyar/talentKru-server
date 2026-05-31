@@ -33,11 +33,11 @@ class GlobalStatus(str, enum.Enum):
     Requirement 1.1: GlobalStatus values for candidate lifecycle tracking.
     """
 
-    ACTIVE = "Active"
-    INTERVIEWING = "Interviewing"
-    EXPIRED = "Expired"
-    INELIGIBLE = "Ineligible"
-    DELETED = "Deleted"
+    Active = "Active"
+    Interviewing = "Interviewing"
+    Expired = "Expired"
+    Ineligible = "Ineligible"
+    Deleted = "Deleted"
 
 
 class Candidate(Base, AuditMixin, VersionMixin):
@@ -81,9 +81,9 @@ class Candidate(Base, AuditMixin, VersionMixin):
 
     # Global status for lifecycle tracking
     global_status = Column(
-        SQLEnum(GlobalStatus),
+        SQLEnum(GlobalStatus, native_enum=True),
         nullable=False,
-        default=GlobalStatus.ACTIVE,
+        default=GlobalStatus.Active,
     )
 
     # Ineligibility reason: required when status is set to Ineligible

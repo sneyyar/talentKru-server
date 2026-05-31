@@ -104,7 +104,7 @@ class ResumeService:
             file_size_bytes=len(file_bytes),
             uploaded_by_user_id=uploaded_by,
             is_primary=candidate_id is None,  # First resume for candidate becomes primary
-            parse_status=ParseStatus.PENDING,
+            parse_status=ParseStatus.Pending,
         )
         self.db.add(resume)
         await self.db.flush()

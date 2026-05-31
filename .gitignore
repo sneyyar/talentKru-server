@@ -36,3 +36,5 @@ Thumbs.db
 
 # Alembic
 alembic/versions/*.pyc
+
+ai_docs/
