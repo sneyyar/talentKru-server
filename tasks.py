@@ -593,7 +593,7 @@ def db_init_users(c):
         db_name = get_env_var("DATABASE_NAME")
 
         # Execute the SQL script
-        sql_script = PROJECT_ROOT / "database" / "create_user.sql"
+        sql_script = PROJECT_ROOT / "db-scripts" / "create_user.sql"
         execute_sql_script(
             db_host, db_port, db_admin_user, db_admin_password, db_name, sql_script
         )

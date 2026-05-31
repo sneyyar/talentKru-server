@@ -289,7 +289,7 @@ The database will be available at `localhost:5432` with credentials from your `.
 poetry run invoke db-init-users
 ```
 
-This creates the necessary database users and schemas defined in `database/create_user.sql`.
+This creates the necessary database users and schemas defined in `db-scripts/create_user.sql`.
 
 ### Step 3: Run Database Migrations
 

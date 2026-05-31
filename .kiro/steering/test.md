@@ -506,7 +506,7 @@ jobs:
       
       - name: Initialize main database
         run: |
-          PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d krudb -f database/create_user.sql
+          PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d krudb -f db-scripts/create_user.sql
       
       - name: Apply migrations to main database
         run: uv run alembic upgrade head

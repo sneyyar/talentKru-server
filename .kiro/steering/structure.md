@@ -241,8 +241,9 @@ talentkru-server/
 │   ├── script.py.mako              # Migration template
 │   └── __pycache__/
 │
-├── database/                       # SQL scripts
-│   └── create_user.sql             # Initial user/schema creation
+├── db-scripts/                     # SQL scripts
+│   ├── create_user.sql             # Initial user/schema creation
+│   └── create_kru_test_db.sql      # Test database creation
 │
 ├── docs/                           # Documentation
 │   └── Identity_and_access_guide.md

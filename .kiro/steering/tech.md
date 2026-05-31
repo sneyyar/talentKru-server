@@ -254,7 +254,7 @@ talentkru-server/
 │   └── domain_events/     # Event system
 ├── tests/                 # Test suite
 ├── alembic/              # Database migrations
-├── database/             # SQL scripts
+├── db-scripts/           # SQL scripts
 ├── docs/                 # Documentation
 ├── scripts/              # Shell scripts
 ├── pyproject.toml        # Poetry configuration
