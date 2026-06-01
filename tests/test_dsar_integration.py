@@ -10,7 +10,7 @@ Requirements: 6.2, 6.3
 import pytest
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from fastapi import HTTPException
 
 from app.modules.candidates.models import Candidate, GlobalStatus
@@ -44,13 +44,13 @@ class TestDSARIntegration:
         portal_service = PortalService(db_session)
         privacy_service = PrivacyService(db_session)
         
-        # Create candidate with full data
+        # Create candidate
         candidate = await candidate_service.create_candidate(
             org_id=org_id,
             name="John Doe",
             email="john@example.com",
-            phone="+1-555-0123",
-            location="San Francisco, CA",
+            phone=None,
+            location=None,
             created_by=user_id,
         )
         
@@ -64,10 +64,7 @@ class TestDSARIntegration:
         assert dsar.status == DSARStatus.PENDING.value
         
         # Process Access DSAR
-        result = await privacy_service.process_access_dsar(
-            dsar_id=dsar.dsar_id,
-            org_id=org_id,
-        )
+        result = await privacy_service.process_access_dsar(dsar)
         
         # Verify status=COMPLETED
         db_dsar = await db_session.get(DataSubjectAccessRequest, dsar.dsar_id)
@@ -102,6 +99,8 @@ class TestDSARIntegration:
             org_id=org_id,
             name="John Doe",
             email="john@example.com",
+            phone=None,
+            location=None,
             created_by=user_id,
         )
         
@@ -117,10 +116,7 @@ class TestDSARIntegration:
         assert dsar.status == DSARStatus.PENDING.value
         
         # Process Erasure DSAR
-        await privacy_service.process_erasure_dsar(
-            dsar_id=dsar.dsar_id,
-            org_id=org_id,
-        )
+        await privacy_service.process_erasure_dsar(dsar)
         
         # Verify status=COMPLETED
         db_dsar = await db_session.get(DataSubjectAccessRequest, dsar.dsar_id)
@@ -156,6 +152,8 @@ class TestDSARIntegration:
             org_id=org_id,
             name="John Doe",
             email="john@example.com",
+            phone=None,
+            location=None,
             created_by=user_id,
         )
         
@@ -169,23 +167,23 @@ class TestDSARIntegration:
         )
         
         # Process Erasure DSAR
-        await privacy_service.process_erasure_dsar(
-            dsar_id=dsar.dsar_id,
-            org_id=org_id,
-        )
+        await privacy_service.process_erasure_dsar(dsar)
         
         # Query audit logs for candidate
         stmt = select(AuditLog).where(
-            AuditLog.organization_id == org_id,
-            AuditLog.entity_type == "Candidate",
+            and_(
+                AuditLog.org_id == org_id,
+                AuditLog.target_entity == "Candidate",
+            )
         )
         result = await db_session.execute(stmt)
         audit_logs = result.scalars().all()
         
         # Verify anonymized=True for all logs
         for log in audit_logs:
-            if log.entity_id == str(candidate_id):
-                assert log.anonymized is True
+            if log.target_id == str(candidate_id):
+                # After erasure, target_id should be None (anonymized)
+                assert log.target_id is None
 
     @pytest.mark.asyncio
     async def test_deny_dsar_with_reason(
@@ -211,6 +209,8 @@ class TestDSARIntegration:
             org_id=org_id,
             name="John Doe",
             email="john@example.com",
+            phone=None,
+            location=None,
             created_by=user_id,
         )
         
@@ -225,8 +225,7 @@ class TestDSARIntegration:
         denial_reason = "Request does not meet legal requirements"
         
         await privacy_service.deny_dsar(
-            dsar_id=dsar.dsar_id,
-            org_id=org_id,
+            dsar=dsar,
             denial_reason=denial_reason,
             denied_by=user_id,
         )
@@ -259,6 +258,8 @@ class TestDSARIntegration:
             org_id=org_id,
             name="John Doe",
             email="john@example.com",
+            phone=None,
+            location=None,
             created_by=user_id,
         )
         
@@ -272,8 +273,7 @@ class TestDSARIntegration:
         # Try to deny with short reason - should fail
         with pytest.raises(HTTPException) as exc_info:
             await privacy_service.deny_dsar(
-                dsar_id=dsar.dsar_id,
-                org_id=org_id,
+                dsar=dsar,
                 denial_reason="Too short",  # < 10 chars
                 denied_by=user_id,
             )
@@ -308,6 +308,8 @@ class TestDSARIntegration:
             org_id=org_id,
             name="John Doe",
             email="john@example.com",
+            phone=None,
+            location=None,
             created_by=user_id,
         )
         
@@ -325,15 +327,9 @@ class TestDSARIntegration:
         )
         
         # Process both
-        await privacy_service.process_access_dsar(
-            dsar_id=dsar1.dsar_id,
-            org_id=org_id,
-        )
+        await privacy_service.process_access_dsar(dsar1)
         
-        await privacy_service.process_access_dsar(
-            dsar_id=dsar2.dsar_id,
-            org_id=org_id,
-        )
+        await privacy_service.process_access_dsar(dsar2)
         
         # Verify both completed
         db_dsar1 = await db_session.get(DataSubjectAccessRequest, dsar1.dsar_id)

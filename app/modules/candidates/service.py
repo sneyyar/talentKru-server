@@ -24,22 +24,23 @@ logger = get_logger(__name__)
 
 # Valid GlobalStatus transitions
 # Requirement 1.7: Restrict GlobalStatus transitions to valid paths
-VALID_TRANSITIONS: dict[GlobalStatus, set[GlobalStatus]] = {
-    GlobalStatus.ACTIVE: {
-        GlobalStatus.INTERVIEWING,
-        GlobalStatus.INELIGIBLE,
-        GlobalStatus.DELETED,
-        GlobalStatus.EXPIRED,
+# Keys and values are string representations of GlobalStatus enum values
+VALID_TRANSITIONS: dict[str, set[str]] = {
+    GlobalStatus.ACTIVE.value: {
+        GlobalStatus.INTERVIEWING.value,
+        GlobalStatus.INELIGIBLE.value,
+        GlobalStatus.DELETED.value,
+        GlobalStatus.EXPIRED.value,
     },
-    GlobalStatus.INTERVIEWING: {
-        GlobalStatus.ACTIVE,
-        GlobalStatus.INELIGIBLE,
-        GlobalStatus.DELETED,
-        GlobalStatus.EXPIRED,
+    GlobalStatus.INTERVIEWING.value: {
+        GlobalStatus.ACTIVE.value,
+        GlobalStatus.INELIGIBLE.value,
+        GlobalStatus.DELETED.value,
+        GlobalStatus.EXPIRED.value,
     },
-    GlobalStatus.EXPIRED: {GlobalStatus.ACTIVE, GlobalStatus.DELETED},
-    GlobalStatus.INELIGIBLE: set(),
-    GlobalStatus.DELETED: set(),
+    GlobalStatus.EXPIRED.value: {GlobalStatus.ACTIVE.value, GlobalStatus.DELETED.value},
+    GlobalStatus.INELIGIBLE.value: set(),
+    GlobalStatus.DELETED.value: set(),
 }
 
 
@@ -59,9 +60,9 @@ class CandidateService:
         org_id: UUID,
         name: str,
         email: str,
-        phone: str | None,
-        location: str | None,
         created_by: UUID,
+        phone: str | None = None,
+        location: str | None = None,
         background_tasks: BackgroundTasks | None = None,
     ) -> Candidate:
         """
@@ -150,7 +151,7 @@ class CandidateService:
     async def transition_status(
         self,
         candidate: Candidate,
-        new_status: GlobalStatus,
+        new_status: str,
         ineligibility_reason: str | None = None,
         updated_by: UUID | None = None,
         background_tasks: BackgroundTasks | None = None,
@@ -164,7 +165,7 @@ class CandidateService:
         
         Args:
             candidate: Candidate instance to transition
-            new_status: Target GlobalStatus
+            new_status: Target GlobalStatus value (string)
             ineligibility_reason: Reason for ineligibility (required if new_status is INELIGIBLE)
             updated_by: User ID performing the transition
             background_tasks: FastAPI BackgroundTasks for event dispatch
@@ -177,14 +178,15 @@ class CandidateService:
         """
         # Validate transition
         # Requirement 1.7, 1.8: Only permit valid transitions
-        if new_status not in VALID_TRANSITIONS.get(candidate.global_status, set()):  # type: ignore[call-overload]
+        current_status = candidate.global_status
+        if new_status not in VALID_TRANSITIONS.get(current_status, set()):
             raise HTTPException(
                 status_code=400,
-                detail=f"Transition from {candidate.global_status.value} to {new_status.value} is not permitted",
+                detail=f"Transition from {current_status} to {new_status} is not permitted",
             )
 
         # Requirement 1.4: Enforce ineligibility_reason when transitioning to INELIGIBLE
-        if new_status == GlobalStatus.INELIGIBLE:
+        if new_status == GlobalStatus.INELIGIBLE.value:
             if not ineligibility_reason or not ineligibility_reason.strip():
                 raise HTTPException(
                     status_code=400,
@@ -192,10 +194,10 @@ class CandidateService:
                 )
             candidate.ineligibility_reason = ineligibility_reason  # type: ignore[assignment]
 
-        # Requirement 1.5: Set deleted_at/deleted_by when transitioning to DELETED
-        if new_status == GlobalStatus.DELETED:
+        # Requirement 1.5: Set deleted_at when transitioning to DELETED
+        # Note: deleted_by is set automatically by the before_flush listener from current_user_id_var
+        if new_status == GlobalStatus.DELETED.value:
             candidate.deleted_at = datetime.now(timezone.utc)  # type: ignore[assignment]
-            candidate.deleted_by = updated_by  # type: ignore[assignment]
 
         candidate.global_status = new_status
         await self.db.flush()
@@ -205,7 +207,7 @@ class CandidateService:
             "candidate_status_changed",
             {
                 "candidate_id": str(candidate.candidate_id),
-                "new_status": new_status.value,
+                "new_status": new_status,
             },
             self.db,
             background_tasks,
@@ -214,7 +216,7 @@ class CandidateService:
         logger.info(
             "candidate_status_changed",
             candidate_id=str(candidate.candidate_id),
-            new_status=new_status.value,
+            new_status=new_status,
         )
 
         return candidate
@@ -354,7 +356,7 @@ class CandidateService:
             "email": decrypt_field(candidate.email),  # type: ignore[arg-type]
             "phone": decrypt_field(candidate.phone) if candidate.phone else None,  # type: ignore[arg-type]
             "location": candidate.location,
-            "global_status": candidate.global_status.value,
+            "global_status": candidate.global_status,
             "ineligibility_reason": candidate.ineligibility_reason,
             "created_at": candidate.created_at,
             "updated_at": candidate.updated_at,
@@ -383,8 +385,8 @@ class CandidateService:
             .where(
                 and_(
                     InterviewJourney.overall_status.in_([  # type: ignore[attr-defined]
-                        JourneyOverallStatus.ACTIVE,
-                        JourneyOverallStatus.ON_HOLD,
+                        JourneyOverallStatus.ACTIVE.value,
+                        JourneyOverallStatus.ON_HOLD.value,
                     ]),
                     InterviewJourney.deleted_at.is_(None),
                 )
@@ -396,7 +398,7 @@ class CandidateService:
         result = await self.db.execute(
             select(Candidate).where(
                 and_(
-                    Candidate.global_status == GlobalStatus.ACTIVE,
+                    Candidate.global_status == GlobalStatus.ACTIVE.value,
                     Candidate.updated_at < cutoff,
                     Candidate.deleted_at.is_(None),
                     ~Candidate.candidate_id.in_(active_journey_subq),

@@ -10,54 +10,11 @@ import pytest
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.base_model import Base
 from app.crypto import encrypt_field, decrypt_field
 from app.modules.candidates.models import Candidate, GlobalStatus
 from app.modules.candidates.service import CandidateService
-from app.domain_events.models import DomainEvent  # Import to register model
-
-
-# Test database setup
-@pytest.fixture
-async def test_db():
-    """Create an in-memory SQLite database for testing."""
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        echo=False,
-        connect_args={"check_same_thread": False},
-    )
-    
-    # Disable foreign key constraints for testing
-    @event.listens_for(engine.sync_engine, "connect")
-    def set_sqlite_pragma(dbapi_conn, connection_record):
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA foreign_keys=OFF")
-        cursor.close()
-    
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    
-    async with async_session() as session:
-        yield session
-    
-    await engine.dispose()
-
-
-@pytest.fixture
-def org_id():
-    """Fixture for organization ID."""
-    return uuid4()
-
-
-@pytest.fixture
-def user_id():
-    """Fixture for user ID."""
-    return uuid4()
 
 
 class TestCandidateCreation:
@@ -65,10 +22,10 @@ class TestCandidateCreation:
 
     @pytest.mark.asyncio
     async def test_create_candidate_encrypts_pii(
-        self, test_db: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id
     ):
         """Test that PII fields are encrypted on creation."""
-        service = CandidateService(test_db)
+        service = CandidateService(db_session)
         
         name = "John Doe"
         email = "john@example.com"
@@ -99,10 +56,10 @@ class TestCandidateCreation:
 
     @pytest.mark.asyncio
     async def test_create_candidate_sets_active_status(
-        self, test_db: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id
     ):
         """Test that new candidates are created with ACTIVE status."""
-        service = CandidateService(test_db)
+        service = CandidateService(db_session)
         
         candidate = await service.create_candidate(
             org_id=org_id,
@@ -117,10 +74,10 @@ class TestCandidateCreation:
 
     @pytest.mark.asyncio
     async def test_create_candidate_email_uniqueness(
-        self, test_db: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id
     ):
         """Test that email must be unique within organization."""
-        service = CandidateService(test_db)
+        service = CandidateService(db_session)
         
         email = "test@example.com"
         
@@ -149,10 +106,10 @@ class TestCandidateCreation:
 
     @pytest.mark.asyncio
     async def test_get_candidate_returns_404_for_missing(
-        self, test_db: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id
     ):
         """Test that get_candidate returns 404 for non-existent candidate."""
-        service = CandidateService(test_db)
+        service = CandidateService(db_session)
         
         with pytest.raises(HTTPException) as exc_info:
             await service.get_candidate(uuid4(), org_id)
@@ -161,10 +118,10 @@ class TestCandidateCreation:
 
     @pytest.mark.asyncio
     async def test_transition_to_ineligible_requires_reason(
-        self, test_db: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id
     ):
         """Test that transitioning to INELIGIBLE requires a reason."""
-        service = CandidateService(test_db)
+        service = CandidateService(db_session)
         
         candidate = await service.create_candidate(
             org_id=org_id,
@@ -207,10 +164,10 @@ class TestCandidateCreation:
 
     @pytest.mark.asyncio
     async def test_transition_invalid_status_raises_400(
-        self, test_db: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id
     ):
         """Test that invalid status transitions raise 400."""
-        service = CandidateService(test_db)
+        service = CandidateService(db_session)
         
         candidate = await service.create_candidate(
             org_id=org_id,
@@ -239,10 +196,12 @@ class TestCandidateCreation:
 
     @pytest.mark.asyncio
     async def test_transition_to_deleted_sets_deleted_fields(
-        self, test_db: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id
     ):
         """Test that transitioning to DELETED sets deleted_at and deleted_by."""
-        service = CandidateService(test_db)
+        from app.base_model import current_user_id_var
+        
+        service = CandidateService(db_session)
         
         candidate = await service.create_candidate(
             org_id=org_id,
@@ -256,21 +215,26 @@ class TestCandidateCreation:
         assert candidate.deleted_at is None
         assert candidate.deleted_by is None
         
-        await service.transition_status(
-            candidate=candidate,
-            new_status=GlobalStatus.DELETED.value,
-            updated_by=user_id,
-        )
+        # Set the context variable so the before_flush listener can set deleted_by
+        token = current_user_id_var.set(str(user_id))
+        try:
+            await service.transition_status(
+                candidate=candidate,
+                new_status=GlobalStatus.DELETED.value,
+                updated_by=user_id,
+            )
+        finally:
+            current_user_id_var.reset(token)
         
         assert candidate.deleted_at is not None
         assert candidate.deleted_by == user_id
 
     @pytest.mark.asyncio
     async def test_deleted_candidate_excluded_from_search(
-        self, test_db: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id
     ):
         """Test that deleted candidates are excluded from search."""
-        service = CandidateService(test_db)
+        service = CandidateService(db_session)
         
         name = "Test Candidate"
         email = "test@example.com"
@@ -311,10 +275,10 @@ class TestCandidateCreation:
 
     @pytest.mark.asyncio
     async def test_get_candidate_excludes_deleted(
-        self, test_db: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id
     ):
         """Test that get_candidate excludes soft-deleted candidates."""
-        service = CandidateService(test_db)
+        service = CandidateService(db_session)
         
         candidate = await service.create_candidate(
             org_id=org_id,

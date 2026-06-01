@@ -80,7 +80,7 @@ class PrivacyService:
             "email": decrypt_field(candidate.email) if candidate.email else None,  # type: ignore[arg-type]
             "phone": decrypt_field(candidate.phone) if candidate.phone else None,  # type: ignore[arg-type]
             "location": candidate.location,  # type: ignore[dict-item]
-            "global_status": candidate.global_status.value if candidate.global_status else None,
+            "global_status": candidate.global_status,
             "ineligibility_reason": candidate.ineligibility_reason,  # type: ignore[dict-item]
             "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
             "updated_at": candidate.updated_at.isoformat() if candidate.updated_at else None,
@@ -142,7 +142,7 @@ class PrivacyService:
                 "domain_name": domain_name,
                 "proficiency_rank": cs.proficiency_rank,
                 "years_of_experience": cs.years_of_experience,
-                "source": cs.source.value if cs.source else None,
+                "source": cs.source,
             })
         
         # Compile resumes

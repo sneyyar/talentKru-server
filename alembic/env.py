@@ -106,10 +106,18 @@ async def run_async_migrations() -> None:
 
 def _run_migrations_sync(connection) -> None:
     """Configure and run migrations on a synchronous connection handle."""
+    # Determine which schema to use for the version table
+    # Schema names match the database user names for simplicity:
+    # - Main database (krudb) uses kru_app schema
+    # - Test database (kru_test_db) uses kru_test schema
+    db_user = settings.DATABASE_USER
+    version_table_schema = db_user
+    
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
         compare_type=True,
+        version_table_schema=version_table_schema,
     )
 
     with context.begin_transaction():

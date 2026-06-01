@@ -67,6 +67,6 @@ async def create_dsar(
     
     return DSARResponse(
         dsar_id=dsar.dsar_id,
-        status=dsar.status.value,
+        status=dsar.status,
         requested_at=dsar.requested_at,
     )

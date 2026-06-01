@@ -706,10 +706,11 @@ def db_init_test(c):
         GRANT CONNECT ON DATABASE {test_db_name} TO {test_db_user};
         
         -- Create test schema if not exists
-        CREATE SCHEMA IF NOT EXISTS talentkru_test AUTHORIZATION {test_db_user};
+        -- Schema name matches the user name for simplicity
+        CREATE SCHEMA IF NOT EXISTS {test_db_user} AUTHORIZATION {test_db_user};
         
         -- Set search path
-        ALTER USER {test_db_user} SET search_path TO talentkru_test, public;
+        ALTER USER {test_db_user} SET search_path TO {test_db_user}, public;
         """
 
         result = subprocess.run(

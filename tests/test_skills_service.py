@@ -162,7 +162,7 @@ async def test_add_candidate_skill_success(db_session: AsyncSession):
     assert candidate_skill.skill_id == skill.skill_id
     assert candidate_skill.proficiency_rank == 3
     assert candidate_skill.years_of_experience == 5
-    assert candidate_skill.source == SkillSource.MANUAL
+    assert candidate_skill.source == SkillSource.MANUAL.value
 
 
 @pytest.mark.asyncio
@@ -321,7 +321,7 @@ async def test_match_and_link_skills_matched(db_session: AsyncSession):
     candidate_skill = result.scalar_one_or_none()
 
     assert candidate_skill is not None
-    assert candidate_skill.source == SkillSource.PARSED
+    assert candidate_skill.source == SkillSource.PARSED.value
     assert candidate_skill.proficiency_rank == 1
     assert candidate_skill.years_of_experience == 0
 

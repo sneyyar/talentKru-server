@@ -360,7 +360,7 @@ class TestAuthServiceBasics:
         
         # Verify user is locked
         user = await user_service.get_user_by_id(user.user_id, org_id)
-        assert user.status == UserStatus.LOCKED
+        assert user.status == UserStatus.LOCKED.value
         assert user.failed_login_attempts == 5
 
     @pytest.mark.asyncio

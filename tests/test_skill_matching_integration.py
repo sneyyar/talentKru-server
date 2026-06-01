@@ -40,15 +40,12 @@ class TestSkillMatchingIntegration:
         
         # Create domain and skill
         domain = await skill_service.create_domain(
-            org_id=org_id,
             name="Programming Languages",
-            created_by=user_id,
         )
         
         skill = await skill_service.create_skill(
             domain_id=domain.domain_id,
             name="python",  # lowercase
-            created_by=user_id,
         )
         
         # Create candidate
@@ -77,7 +74,7 @@ class TestSkillMatchingIntegration:
         candidate_skill = result.scalar_one_or_none()
         
         assert candidate_skill is not None
-        assert candidate_skill.source == SkillSource.PARSED
+        assert candidate_skill.source == SkillSource.PARSED.value
 
     @pytest.mark.asyncio
     async def test_unmatched_skill_creates_review(
@@ -98,15 +95,12 @@ class TestSkillMatchingIntegration:
         
         # Create domain and skill
         domain = await skill_service.create_domain(
-            org_id=org_id,
             name="Programming Languages",
-            created_by=user_id,
         )
         
         skill = await skill_service.create_skill(
             domain_id=domain.domain_id,
             name="python",
-            created_by=user_id,
         )
         
         # Create candidate
@@ -201,9 +195,7 @@ class TestSkillMatchingIntegration:
         
         # Create domain and skills
         domain = await skill_service.create_domain(
-            org_id=org_id,
             name="Programming Languages",
-            created_by=user_id,
         )
         
         skill_names = ["python", "javascript", "java", "go", "rust"]
@@ -213,7 +205,6 @@ class TestSkillMatchingIntegration:
             skill = await skill_service.create_skill(
                 domain_id=domain.domain_id,
                 name=name,
-                created_by=user_id,
             )
             created_skills[name] = skill
         
@@ -266,15 +257,12 @@ class TestSkillMatchingIntegration:
         
         # Create domain and skill
         domain = await skill_service.create_domain(
-            org_id=org_id,
             name="Programming Languages",
-            created_by=user_id,
         )
         
         skill = await skill_service.create_skill(
             domain_id=domain.domain_id,
             name="python",
-            created_by=user_id,
         )
         
         # Create candidate
@@ -302,13 +290,12 @@ class TestSkillMatchingIntegration:
         result = await db_session.execute(stmt)
         candidate_skill = result.scalar_one()
         
-        assert candidate_skill.source == SkillSource.PARSED
+        assert candidate_skill.source == SkillSource.PARSED.value
         
         # Manually add another skill (source=MANUAL)
         skill2 = await skill_service.create_skill(
             domain_id=domain.domain_id,
             name="javascript",
-            created_by=user_id,
         )
         
         await skill_service.add_candidate_skill(
@@ -316,8 +303,6 @@ class TestSkillMatchingIntegration:
             skill_id=skill2.skill_id,
             proficiency_rank=4,
             years_of_experience=5,
-            source=SkillSource.MANUAL,
-            created_by=user_id,
         )
         
         # Verify source=MANUAL
@@ -328,4 +313,4 @@ class TestSkillMatchingIntegration:
         result = await db_session.execute(stmt)
         candidate_skill2 = result.scalar_one()
         
-        assert candidate_skill2.source == SkillSource.MANUAL
+        assert candidate_skill2.source == SkillSource.MANUAL.value

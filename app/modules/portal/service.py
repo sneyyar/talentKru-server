@@ -34,14 +34,13 @@ class PortalService:
         
         Requirements: 6.1
         """
-        # Convert string request_type to enum
-        request_type_enum = DSARRequestType(request_type.lower())
-        
+        # request_type is already a string value (e.g., "ACCESS", "ERASURE")
+        # Store it directly without enum conversion
         dsar = DataSubjectAccessRequest(
             dsar_id=uuid4(),
             organization_id=org_id,
             candidate_id=candidate_id,
-            request_type=request_type_enum,
+            request_type=request_type,
             status=DSARStatus.PENDING.value,
             requested_at=datetime.now(timezone.utc),
         )
@@ -54,7 +53,7 @@ class PortalService:
             dsar_id=str(dsar.dsar_id),
             candidate_id=str(candidate_id),
             organization_id=str(org_id),
-            request_type=request_type_enum.value,
+            request_type=request_type,
         )
         
         return dsar
