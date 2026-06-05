@@ -371,6 +371,156 @@ class MyService:
 | SkillSource | MANUAL, PARSED, INFERRED | candidate_skills | source |
 | JourneyOverallStatus | ACTIVE, ON_HOLD, COMPLETED, CANCELLED | interview_journeys | overall_status |
 
+## Service-Layer Transaction Management
+
+**IMPORTANT**: All data modifications must occur within explicit service-layer transactions.
+
+### Pattern: Declarative Transactions with `@transactional()` Decorator
+
+All service methods that modify data must use the `@transactional()` decorator:
+
+```python
+from app.decorators import transactional, read_only
+
+class CandidateService:
+    @transactional()  # ← Decorator handles transaction lifecycle
+    async def create_candidate(self, org_id: UUID, first_name: str) -> Candidate:
+        """Create candidate with automatic transaction management."""
+        candidate = Candidate(organization_id=org_id, first_name=first_name)
+        self.db.add(candidate)
+        await self.db.flush()
+        return candidate
+    
+    @transactional(name="bulk_import_candidates")  # ← Custom name for logging
+    async def bulk_import_candidates(self, org_id: UUID, rows: list[dict]) -> list[Candidate]:
+        """Import multiple candidates atomically (all-or-nothing)."""
+        candidates = []
+        for row in rows:
+            candidate = Candidate(organization_id=org_id, **row)
+            self.db.add(candidate)
+            candidates.append(candidate)
+        await self.db.flush()
+        return candidates
+    
+    @read_only  # ← No transaction needed for queries
+    async def get_candidate(self, candidate_id: UUID) -> Candidate | None:
+        """Get candidate (read-only)."""
+        result = await self.db.execute(
+            select(Candidate).where(Candidate.candidate_id == candidate_id)
+        )
+        return result.scalar_one_or_none()
+```
+
+### How It Works
+
+1. **@transactional() decorator** wraps method in `atomic_transaction` context manager
+2. **On success**: Commits transaction automatically
+3. **On error**: Rolls back automatically and re-raises exception
+4. **Routes**: Call service method and return response (no commits/rollbacks in routes)
+
+```python
+@router.post("/candidates")
+async def create_candidate(
+    request: CreateCandidateRequest,
+    db: AsyncSession = Depends(get_db_session),
+):
+    service = CandidateService(db)
+    candidate = await service.create_candidate(...)
+    # Service already committed; no await db.commit() needed
+    return CandidateResponse.from_orm(candidate)
+```
+
+### Key Rules
+
+1. **All write operations** must have `@transactional()` decorator
+2. **All read operations** should have `@read_only` decorator (optional but recommended for clarity)
+3. **Routes never commit** — service layer owns transaction boundaries
+4. **Tests don't commit** — fixtures roll back for cleanup
+5. **Complex operations** use custom `name` parameter for logging
+
+### Database Layer Configuration
+
+Service-layer transactions depend on proper database configuration:
+
+```python
+# app/database.py
+AsyncSessionFactory = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=True,  # Objects expire after commit (force fresh queries)
+    autoflush=True,          # Flush before queries (ensure consistency)
+)
+```
+
+**Why these settings**:
+- `expire_on_commit=True`: Forces fresh queries after commit (matches production)
+- `autoflush=True`: Ensures consistency between Python objects and database
+
+### Systematic Application
+
+This pattern is applied systematically to all 15+ service modules:
+
+**Phase 2 - Core Services** (6 modules):
+- `auth`, `users`, `organizations`, `rbac`, `invitations`, `password_reset`
+
+**Phase 3 - Candidate & Job** (6 modules):
+- `candidates`, `resumes`, `skills`, `requisitions`, `job_posting`, `job_profile`
+
+**Phase 4 - Interview & Support** (7+ modules):
+- `journeys`, `interviews`, `questionnaires`, `privacy`, `portal`, `matching`, `reporting`
+
+### Testing with Transactions
+
+Test fixtures use production-like session configuration:
+
+```python
+@pytest.fixture
+async def db_session(async_session_factory):
+    """Database session for tests with transaction support."""
+    async with async_session_factory() as session:
+        yield session
+        # Fixture rolls back after test for cleanup
+        await session.rollback()
+```
+
+Tests verify atomicity:
+
+```python
+@pytest.mark.asyncio
+async def test_create_candidate_is_atomic(db_session: AsyncSession, org_id):
+    """Verify service commits data atomically."""
+    service = CandidateService(db_session)
+    candidate = await service.create_candidate(org_id=org_id, first_name="John")
+    
+    # Service committed; data is visible
+    result = await db_session.execute(select(Candidate).where(...))
+    assert result.scalar_one() is not None
+```
+
+### Automatic Audit Field Population
+
+Audit fields are automatically populated via SQLAlchemy event listener:
+
+```python
+# Automatic - no manual setting needed
+candidate = Candidate(...)
+# created_by, created_at will be set automatically by listener
+```
+
+**Fields populated**:
+- `created_by`: Set when object is created (new)
+- `updated_by`: Set when object is modified (dirty)
+- `deleted_by`: Set when object is deleted
+
+### References
+
+For detailed implementation and specification, see:
+- `.kiro/specs/platform-foundation/transaction-management/tasks.md` — Implementation tasks
+- `.kiro/specs/platform-foundation/transaction-management/design.md` — Design patterns
+- `.kiro/specs/platform-foundation/transaction-management/requirements.md` — Requirements
+
+---
+
 ## Code Style & Standards
 
 ### Formatting
