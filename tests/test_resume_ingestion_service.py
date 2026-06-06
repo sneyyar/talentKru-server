@@ -13,7 +13,7 @@ from datetime import date
 from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
-from hypothesis import given, settings as hypothesis_settings
+from hypothesis import given, settings as hypothesis_settings, HealthCheck
 from hypothesis import strategies as st
 
 from app.modules.resumes.models import Resume, ParseStatus, CandidateJobHistory
@@ -227,8 +227,8 @@ class TestParseStatusTransitions:
 
     @pytest.mark.asyncio
     @given(agent_succeeds=st.booleans())
-    @hypothesis_settings(max_examples=50)
-    async def test_parse_status_on_ingestion_outcome(self, agent_succeeds: bool):
+    @hypothesis_settings(max_examples=50, suppress_health_check=[HealthCheck.function_scoped_fixture])
+    async def test_parse_status_on_ingestion_outcome(self, agent_succeeds: bool, test_run_id):
         """
         Property 6: ParseStatus transitions correctly on ingestion outcome
 
@@ -246,13 +246,13 @@ class TestParseStatusTransitions:
         # Create mock database session
         mock_db = AsyncMock()
         
-        # Create a resume
+        # Create a resume with unique data
         resume = Resume(
             resume_id=resume_id,
             organization_id=org_id,
-            storage_location="local://test.pdf",
+            storage_location=f"local://test-{test_run_id}.pdf",
             mime_type="application/pdf",
-            file_name="test.pdf",
+            file_name=f"test-{test_run_id}.pdf",
             file_size_bytes=1024,
             uploaded_by_user_id=user_id,
             is_primary=True,
@@ -264,23 +264,49 @@ class TestParseStatusTransitions:
         
         if agent_succeeds:
             # Mock successful agent response
-            mock_response = AsyncMock()
-            mock_response.json.return_value = {
+            mock_response = MagicMock()
+            mock_response.json = MagicMock(return_value={
                 "name": "John Doe",
                 "email": "john@example.com",
                 "phone": None,
                 "job_history": [],
                 "skills": [],
-            }
-            mock_response.raise_for_status = AsyncMock()
+            })
+            mock_response.raise_for_status = MagicMock()
             
-            with patch("httpx.AsyncClient.post", return_value=mock_response):
-                with patch("app.modules.resumes.service.AsyncSessionFactory") as mock_factory:
-                    mock_factory.return_value.__aenter__.return_value = mock_db
-                    mock_factory.return_value.__aexit__.return_value = None
-                    
-                    with patch("app.modules.resumes.service.CandidateService"):
-                        with patch("app.modules.resumes.service.SkillService"):
+            mock_client = MagicMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            
+            # Mock db operations - make sure execute returns something with scalar_one_or_none
+            mock_execute_result = MagicMock()
+            mock_execute_result.scalar_one_or_none = MagicMock(return_value=None)
+            mock_db.execute = AsyncMock(return_value=mock_execute_result)
+            mock_db.flush = AsyncMock()
+            mock_db.commit = AsyncMock()
+            
+            # Create a proper async context manager for AsyncSessionFactory
+            class AsyncContextManager:
+                async def __aenter__(self):
+                    return mock_db
+                async def __aexit__(self, *args):
+                    pass
+            
+            with patch("httpx.AsyncClient", return_value=mock_client):
+                with patch("app.modules.resumes.service.AsyncSessionFactory", return_value=AsyncContextManager()):
+                    with patch("app.modules.resumes.service.CandidateService") as mock_candidate_service_class:
+                        mock_candidate_service = MagicMock()
+                        mock_candidate_service_class.return_value = mock_candidate_service
+                        mock_candidate = MagicMock(spec=Candidate)
+                        mock_candidate.candidate_id = uuid.uuid4()
+                        mock_candidate_service.create_candidate = AsyncMock(return_value=mock_candidate)
+                        
+                        with patch("app.modules.resumes.service.SkillService") as mock_skill_service_class:
+                            mock_skill_service = MagicMock()
+                            mock_skill_service_class.return_value = mock_skill_service
+                            mock_skill_service.match_and_link_skills = AsyncMock()
+                            
                             await _run_ingestion(resume_id, "local://test.pdf", org_id, correlation_id)
             
             # Verify parse_status is COMPLETED
@@ -307,9 +333,9 @@ class TestIngestionUpsertRecords:
         job_history_count=st.integers(min_value=0, max_value=5),
         skill_count=st.integers(min_value=0, max_value=10),
     )
-    @hypothesis_settings(max_examples=50)
+    @hypothesis_settings(max_examples=50, suppress_health_check=[HealthCheck.function_scoped_fixture])
     async def test_ingestion_upserts_all_records(
-        self, job_history_count: int, skill_count: int
+        self, job_history_count: int, skill_count: int, test_run_id
     ):
         """
         Property 7: Ingestion upserts all associated records on success
@@ -333,33 +359,33 @@ class TestIngestionUpsertRecords:
         mock_result.scalar_one_or_none.return_value = None
         mock_db.execute.return_value = mock_result
         
-        # Create a resume
+        # Create a resume with unique data
         resume = Resume(
             resume_id=uuid.uuid4(),
             organization_id=org_id,
-            storage_location="local://test.pdf",
+            storage_location=f"local://test-{test_run_id}.pdf",
             mime_type="application/pdf",
-            file_name="test.pdf",
+            file_name=f"test-{test_run_id}.pdf",
             file_size_bytes=1024,
             uploaded_by_user_id=user_id,
             is_primary=True,
             parse_status=ParseStatus.PENDING.value,
         )
         
-        # Create job history entries
+        # Create job history entries with unique data
         job_history = []
         for i in range(job_history_count):
             job_history.append({
-                "company_name": f"Company{i}",
-                "job_title": f"Title{i}",
+                "company_name": f"Company{i}-{test_run_id}",
+                "job_title": f"Title{i}-{test_run_id}",
                 "start_date": date(2020 + i, 1, 1),
                 "end_date": None if i == job_history_count - 1 else date(2021 + i, 12, 31),
-                "description": f"Description{i}",
+                "description": f"Description{i}-{test_run_id}",
                 "is_current": i == job_history_count - 1,
             })
         
-        # Create extracted skills
-        extracted_skills = [f"Skill{i}" for i in range(skill_count)]
+        # Create extracted skills with unique data
+        extracted_skills = [f"Skill{i}-{test_run_id}" for i in range(skill_count)]
         
         extracted_data = {
             "name": "John Doe",
@@ -379,8 +405,12 @@ class TestIngestionUpsertRecords:
             mock_candidate.candidate_id = candidate_id
             mock_service.create_candidate = AsyncMock(return_value=mock_candidate)
             
-            # Mock SkillService
-            with patch("app.modules.resumes.service.SkillService"):
+            # Mock SkillService with proper async methods
+            with patch("app.modules.resumes.service.SkillService") as mock_skill_service_class:
+                mock_skill_service = MagicMock()
+                mock_skill_service_class.return_value = mock_skill_service
+                mock_skill_service.match_and_link_skills = AsyncMock()
+                
                 await _apply_ingestion_results(resume, extracted_data, org_id, mock_db)
         
         # Verify job history records were added

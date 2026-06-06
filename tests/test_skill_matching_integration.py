@@ -23,7 +23,7 @@ class TestSkillMatchingIntegration:
 
     @pytest.mark.asyncio
     async def test_case_insensitive_skill_matching(
-        self, db_session: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id, test_run_id
     ):
         """
         Test: Case-insensitive skill matching
@@ -38,26 +38,26 @@ class TestSkillMatchingIntegration:
         skill_service = SkillService(db_session)
         candidate_service = CandidateService(db_session)
         
-        # Create domain and skill
+        # Create domain and skill with unique name
         domain = await skill_service.create_domain(
-            name="Programming Languages",
+            name=f"Programming Languages-{test_run_id}",
         )
         
         skill = await skill_service.create_skill(
             domain_id=domain.domain_id,
-            name="python",  # lowercase
+            name=f"python-{test_run_id}",  # lowercase with unique suffix
         )
         
         # Create candidate
         candidate = await candidate_service.create_candidate(
             org_id=org_id,
             name="John Doe",
-            email="john@example.com",
+            email=f"test-case-insensitive-{test_run_id}@example.com",
             created_by=user_id,
         )
         
         # Match skill with different case
-        extracted_skills = ["PYTHON", "JavaScript"]  # uppercase
+        extracted_skills = [f"PYTHON-{test_run_id}", "JavaScript"]  # uppercase version
         
         await skill_service.match_and_link_skills(
             candidate_id=candidate.candidate_id,
@@ -78,7 +78,7 @@ class TestSkillMatchingIntegration:
 
     @pytest.mark.asyncio
     async def test_unmatched_skill_creates_review(
-        self, db_session: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id, test_run_id
     ):
         """
         Test: Unmatched skill creates review
@@ -93,26 +93,26 @@ class TestSkillMatchingIntegration:
         skill_service = SkillService(db_session)
         candidate_service = CandidateService(db_session)
         
-        # Create domain and skill
+        # Create domain and skill with unique name
         domain = await skill_service.create_domain(
-            name="Programming Languages",
+            name=f"Programming Languages-{test_run_id}",
         )
         
         skill = await skill_service.create_skill(
             domain_id=domain.domain_id,
-            name="python",
+            name=f"python-{test_run_id}",
         )
         
         # Create candidate
         candidate = await candidate_service.create_candidate(
             org_id=org_id,
             name="John Doe",
-            email="john@example.com",
+            email=f"test-unmatched-{test_run_id}@example.com",
             created_by=user_id,
         )
         
         # Match skills with unmatched skill
-        extracted_skills = ["python", "rust", "go"]  # rust and go don't exist
+        extracted_skills = [f"python-{test_run_id}", f"rust-{test_run_id}", f"go-{test_run_id}"]  # rust and go don't exist
         
         await skill_service.match_and_link_skills(
             candidate_id=candidate.candidate_id,
@@ -129,8 +129,8 @@ class TestSkillMatchingIntegration:
         
         assert len(reviews) == 2
         unmatched_names = {r.unmatched_skill_name for r in reviews}
-        assert "rust" in unmatched_names
-        assert "go" in unmatched_names
+        assert f"rust-{test_run_id}" in unmatched_names
+        assert f"go-{test_run_id}" in unmatched_names
 
     @pytest.mark.asyncio
     async def test_zero_skills_dont_block_ingestion(
@@ -178,7 +178,7 @@ class TestSkillMatchingIntegration:
 
     @pytest.mark.asyncio
     async def test_multiple_skills_matching(
-        self, db_session: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id, test_run_id
     ):
         """
         Test: Multiple skills matching
@@ -193,12 +193,12 @@ class TestSkillMatchingIntegration:
         skill_service = SkillService(db_session)
         candidate_service = CandidateService(db_session)
         
-        # Create domain and skills
+        # Create domain and skills with unique name
         domain = await skill_service.create_domain(
-            name="Programming Languages",
+            name=f"Programming Languages-{test_run_id}",
         )
         
-        skill_names = ["python", "javascript", "java", "go", "rust"]
+        skill_names = [f"python-{test_run_id}", f"javascript-{test_run_id}", f"java-{test_run_id}", f"go-{test_run_id}", f"rust-{test_run_id}"]
         created_skills = {}
         
         for name in skill_names:
@@ -212,12 +212,12 @@ class TestSkillMatchingIntegration:
         candidate = await candidate_service.create_candidate(
             org_id=org_id,
             name="John Doe",
-            email="john@example.com",
+            email=f"test-multiple-{test_run_id}@example.com",
             created_by=user_id,
         )
         
         # Match 3 skills
-        extracted_skills = ["python", "javascript", "java"]
+        extracted_skills = [f"python-{test_run_id}", f"javascript-{test_run_id}", f"java-{test_run_id}"]
         
         await skill_service.match_and_link_skills(
             candidate_id=candidate.candidate_id,
@@ -241,7 +241,7 @@ class TestSkillMatchingIntegration:
 
     @pytest.mark.asyncio
     async def test_skill_source_tracking(
-        self, db_session: AsyncSession, org_id, user_id
+        self, db_session: AsyncSession, org_id, user_id, test_run_id
     ):
         """
         Test: Skill source tracking
@@ -255,26 +255,26 @@ class TestSkillMatchingIntegration:
         skill_service = SkillService(db_session)
         candidate_service = CandidateService(db_session)
         
-        # Create domain and skill
+        # Create domain and skill with unique name
         domain = await skill_service.create_domain(
-            name="Programming Languages",
+            name=f"Programming Languages-{test_run_id}",
         )
         
         skill = await skill_service.create_skill(
             domain_id=domain.domain_id,
-            name="python",
+            name=f"python-{test_run_id}",
         )
         
         # Create candidate
         candidate = await candidate_service.create_candidate(
             org_id=org_id,
             name="John Doe",
-            email="john@example.com",
+            email=f"test-source-tracking-{test_run_id}@example.com",
             created_by=user_id,
         )
         
         # Ingest resume with skill (source=PARSED)
-        extracted_skills = ["python"]
+        extracted_skills = [f"python-{test_run_id}"]
         
         await skill_service.match_and_link_skills(
             candidate_id=candidate.candidate_id,
@@ -295,7 +295,7 @@ class TestSkillMatchingIntegration:
         # Manually add another skill (source=MANUAL)
         skill2 = await skill_service.create_skill(
             domain_id=domain.domain_id,
-            name="javascript",
+            name=f"javascript-{test_run_id}",
         )
         
         await skill_service.add_candidate_skill(

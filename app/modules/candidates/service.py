@@ -16,6 +16,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crypto import decrypt_field, encrypt_field
+from app.decorators import transactional, read_only
 from app.domain_events.publisher import publish_event
 from app.modules.candidates.models import Candidate, GlobalStatus
 from app.observability.logging import get_logger
@@ -55,6 +56,7 @@ class CandidateService:
         """
         self.db = db
 
+    @transactional()
     async def create_candidate(
         self,
         org_id: UUID,
@@ -148,6 +150,7 @@ class CandidateService:
 
         return candidate
 
+    @transactional()
     async def transition_status(
         self,
         candidate: Candidate,
@@ -221,6 +224,7 @@ class CandidateService:
 
         return candidate
 
+    @read_only
     async def search_candidates(
         self,
         org_id: UUID,
@@ -305,6 +309,7 @@ class CandidateService:
 
         return candidates, total_count
 
+    @read_only
     async def get_candidate(
         self, candidate_id: UUID, org_id: UUID
     ) -> Candidate:
@@ -363,6 +368,7 @@ class CandidateService:
             "version": candidate.version,
         }
 
+    @transactional(name="candidate_expiry_check")
     async def run_expiry_check(self) -> int:
         """
         Run candidate expiry scheduler.

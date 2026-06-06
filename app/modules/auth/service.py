@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.decorators import transactional, read_only
 from app.modules.auth.models import RefreshToken, RevokedToken
 from app.modules.users.models import User, UserStatus
 
@@ -127,6 +128,7 @@ class AuthService:
         self.db = db
         self.revocation_cache = revocation_cache
 
+    @transactional()
     async def authenticate(
         self, email: str, password: str, org_id: UUID
     ) -> tuple[str, str]:
@@ -194,6 +196,7 @@ class AuthService:
             payload, settings.JWT_SIGNING_KEY, algorithm=JWT_ALGORITHM
         )
 
+    @transactional()
     async def _issue_refresh_token(self, user: User) -> str:
         """
         Issue a refresh token and store its hash in the database.
@@ -223,6 +226,7 @@ class AuthService:
         
         return raw_token
 
+    @transactional()
     async def _handle_failed_attempt(self, user: Optional[User]) -> None:
         """
         Handle a failed login attempt.
@@ -245,6 +249,7 @@ class AuthService:
         
         await self.db.flush()
 
+    @read_only
     async def _get_user_by_email(
         self, email: str, org_id: UUID
     ) -> Optional[User]:
@@ -265,6 +270,7 @@ class AuthService:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
+    @transactional(name="refresh_token")
     async def refresh(self, refresh_token: str) -> tuple[str, str]:
         """
         Refresh an access token using a refresh token.
@@ -344,6 +350,7 @@ class AuthService:
         
         return access_token, new_refresh_token_raw
 
+    @transactional()
     async def _revoke_token_family(self, token_record: RefreshToken, now: datetime) -> None:
         """
         Revoke an entire token family (linked via replaced_by_token_id chain).
@@ -401,6 +408,7 @@ class AuthService:
         # as revoked, which prevents further token rotation from this family.
         # The access tokens will be checked against the revocation cache when used.
 
+    @transactional(name="revoke_all_user_tokens")
     async def revoke_all_user_tokens(self, user_id: UUID, reason: str = "status_change") -> None:
         """
         Revoke all active refresh tokens for a user and add active JTIs to revocation list.
@@ -434,6 +442,7 @@ class AuthService:
         # we would store the JTI when issuing the access token and revoke it here.
         # For now, the revocation of refresh tokens prevents further token rotation.
 
+    @transactional(name="impersonate_user")
     async def impersonate(
         self,
         principal,  # Principal type

@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import write_audit_log
+from app.decorators import transactional, read_only
 from app.modules.rbac.models import (
     Privilege,
     Role,
@@ -51,6 +52,7 @@ class RBACService:
         """
         self.db = db
 
+    @transactional(name="assign_role")
     async def assign_role(
         self, user_id: UUID, role_name: str, actor_id: UUID, obo_by: Optional[UUID] = None
     ) -> UserRole:
@@ -111,6 +113,7 @@ class RBACService:
         
         return user_role
 
+    @transactional(name="remove_role")
     async def remove_role(
         self, user_id: UUID, role_name: str, actor_id: UUID, obo_by: Optional[UUID] = None
     ) -> None:
@@ -162,6 +165,7 @@ class RBACService:
             db=self.db,
         )
 
+    @read_only
     async def list_roles(self) -> list[Role]:
         """
         List all available roles.
@@ -175,6 +179,7 @@ class RBACService:
         result = await self.db.execute(stmt)
         return cast(list[Role], result.scalars().all())  # type: ignore[arg-type]  # type: ignore[assignment]
 
+    @read_only
     async def get_user_roles(self, user_id: UUID) -> list[UserRole]:
         """
         Get all roles for a user.
@@ -191,6 +196,7 @@ class RBACService:
         result = await self.db.execute(stmt)
         return cast(list[UserRole], result.scalars().all())  # type: ignore[arg-type]  # type: ignore[assignment]
 
+    @transactional(name="assign_privilege")
     async def assign_privilege(
         self, role_name: str, privilege_id: UUID, actor_id: UUID, obo_by: Optional[UUID] = None
     ) -> RolePrivilege:
@@ -255,6 +261,7 @@ class RBACService:
         
         return role_privilege
 
+    @transactional(name="remove_privilege")
     async def remove_privilege(
         self, role_name: str, privilege_id: UUID, actor_id: UUID, obo_by: Optional[UUID] = None
     ) -> None:
@@ -320,6 +327,7 @@ class RBACService:
             db=self.db,
         )
 
+    @read_only
     async def list_privileges(self) -> list[Privilege]:
         """
         List all available privileges.
@@ -333,6 +341,7 @@ class RBACService:
         result = await self.db.execute(stmt)
         return cast(list[Privilege], result.scalars().all())  # type: ignore[arg-type]  # type: ignore[assignment]
 
+    @read_only
     async def get_role_privileges(self, role_name: str) -> list[RolePrivilege]:
         """
         Get all privileges for a role.

@@ -326,7 +326,7 @@ class TestPrivilegeManagementProperties:
     )
     @hypothesis_settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
     @pytest.mark.asyncio
-    async def test_role_minimum_privilege_invariant(self, async_db, num_privileges):
+    async def test_role_minimum_privilege_invariant(self, async_db, num_privileges, test_run_id):
         """
         Property 12: Role minimum privilege invariant
         
@@ -339,17 +339,18 @@ class TestPrivilegeManagementProperties:
         service = RBACService(async_db)
         actor_id = uuid4()
         
-        # Create role
-        role = Role(role_name=f"TestRole_{uuid4().hex[:8]}", description="Test role")
+        # Create role with unique name combining test_run_id and UUID
+        role_name = f"TestRole-{test_run_id}-{uuid4().hex[:8]}"
+        role = Role(role_name=role_name, description="Test role")
         async_db.add(role)
         
-        # Create privileges
+        # Create privileges with unique names
         privileges = []
         for i in range(num_privileges):
             priv = Privilege(
                 privilege_id=uuid4(),
-                name=f"priv_{uuid4().hex[:8]}",
-                description=f"Privilege {i}",
+                name=f"priv-{test_run_id}-{i}-{uuid4().hex[:8]}",
+                description=f"Privilege {i}-{test_run_id}",
                 resource_category="test"
             )
             async_db.add(priv)
@@ -361,7 +362,7 @@ class TestPrivilegeManagementProperties:
             # Assign all privileges
             for priv in privileges:
                 await service.assign_privilege(
-                    role_name=role.role_name,
+                    role_name=role_name,
                     privilege_id=priv.privilege_id,
                     actor_id=actor_id,
                 )
@@ -369,23 +370,23 @@ class TestPrivilegeManagementProperties:
             # Remove all but one
             for priv in privileges[:-1]:
                 await service.remove_privilege(
-                    role_name=role.role_name,
+                    role_name=role_name,
                     privilege_id=priv.privilege_id,
                     actor_id=actor_id,
                 )
             
             # Verify role has exactly one privilege
-            remaining = await service.get_role_privileges(role.role_name)
+            remaining = await service.get_role_privileges(role_name)
             assert len(remaining) == 1
             
             # Try to remove the last privilege (should fail)
             with pytest.raises(ValueError, match="Cannot remove the last privilege"):
                 await service.remove_privilege(
-                    role_name=role.role_name,
+                    role_name=role_name,
                     privilege_id=privileges[-1].privilege_id,
                     actor_id=actor_id,
                 )
             
             # Verify role still has exactly one privilege
-            remaining = await service.get_role_privileges(role.role_name)
+            remaining = await service.get_role_privileges(role_name)
             assert len(remaining) == 1

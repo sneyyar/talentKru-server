@@ -14,6 +14,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.decorators import transactional, read_only
 from app.modules.job_profile.models import JobProfile, JobProfileSkill, SkillDesignation
 from app.modules.job_profile.schemas import JobProfileCreate, JobProfileSkillCreate
 
@@ -29,6 +30,7 @@ class JobProfileService:
         """
         self.db = db
 
+    @transactional()
     async def create_job_profile(
         self,
         org_id: UUID,
@@ -92,6 +94,7 @@ class JobProfileService:
         await self.db.flush()
         return job_profile
 
+    @read_only
     async def get_job_profile(
         self,
         org_id: UUID,
@@ -127,6 +130,7 @@ class JobProfileService:
             )
         return job_profile
 
+    @read_only
     async def list_job_profiles(
         self,
         org_id: UUID,
@@ -158,6 +162,7 @@ class JobProfileService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())  # type: ignore[assignment]
 
+    @transactional()
     async def update_job_profile(
         self,
         org_id: UUID,
@@ -236,6 +241,7 @@ class JobProfileService:
         await self.db.refresh(job_profile)
         return job_profile
 
+    @transactional()
     async def delete_job_profile(
         self,
         org_id: UUID,

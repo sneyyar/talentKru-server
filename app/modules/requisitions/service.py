@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from sqlalchemy.orm.exc import StaleDataError
 
+from app.decorators import transactional, read_only
 from app.modules.requisitions.models import (
     JobRequisition,
     RequisitionStatus,
@@ -41,6 +42,7 @@ class RequisitionService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @transactional()
     async def create_requisition(
         self,
         org_id: UUID,
@@ -92,6 +94,7 @@ class RequisitionService:
         
         return requisition
 
+    @transactional()
     async def transition_status(
         self,
         requisition_id: UUID,
@@ -170,6 +173,7 @@ class RequisitionService:
         
         return requisition
 
+    @transactional()
     async def associate_candidate(
         self,
         requisition_id: UUID,
@@ -267,6 +271,7 @@ class RequisitionService:
         
         return candidate_requisition
 
+    @transactional()
     async def add_required_skill(
         self,
         requisition_id: UUID,
@@ -367,6 +372,7 @@ class RequisitionService:
         
         return required_skill
 
+    @read_only
     async def get_requisition(
         self,
         requisition_id: UUID,
@@ -396,6 +402,7 @@ class RequisitionService:
         
         return requisition
 
+    @read_only
     async def list_requisitions(
         self,
         org_id: UUID,

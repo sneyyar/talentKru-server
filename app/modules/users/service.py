@@ -23,6 +23,7 @@ from sqlalchemy.orm import selectinload
 
 from app.audit import write_audit_log
 from app.crypto import decrypt_field, encrypt_field
+from app.decorators import transactional, read_only
 from app.modules.users.models import PasswordHistory, User, UserStatus
 
 
@@ -46,6 +47,7 @@ class UserService:
         """
         self.db = db
 
+    @transactional()
     async def create_user(
         self,
         email: str,
@@ -141,6 +143,7 @@ class UserService:
         
         return user
 
+    @transactional()
     async def update_user(
         self,
         user_id: UUID,
@@ -211,6 +214,7 @@ class UserService:
         
         return user
 
+    @read_only
     async def get_user_by_id(
         self, user_id: UUID, org_id: UUID
     ) -> Optional[User]:
@@ -232,6 +236,7 @@ class UserService:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
+    @read_only
     async def list_users(
         self,
         org_id: UUID,
@@ -273,6 +278,7 @@ class UserService:
         
         return users, total_count
 
+    @transactional(name="lock_user")
     async def lock_user(self, user_id: UUID, org_id: UUID) -> User:
         """
         Lock a user account (set status to Locked).
@@ -310,6 +316,7 @@ class UserService:
                     continue
                 raise
 
+    @read_only
     async def get_password_history(
         self, user_id: UUID, limit: int = 5
     ) -> list[PasswordHistory]:
@@ -334,6 +341,7 @@ class UserService:
         result = await self.db.execute(stmt)
         return cast(list[PasswordHistory], result.scalars().all())  # type: ignore[assignment]  # type: ignore[assignment]
 
+    @transactional(name="add_password_history")
     async def add_password_history(
         self, user_id: UUID, hashed_password: str
     ) -> PasswordHistory:
@@ -357,6 +365,7 @@ class UserService:
         await self.db.flush()
         return entry
 
+    @read_only
     async def _get_user_by_email_hash(
         self, email_hash: str, org_id: UUID
     ) -> Optional[User]:

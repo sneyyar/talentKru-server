@@ -47,7 +47,6 @@ async def accept_invitation(
     
     try:
         user = await service.accept_invitation(request.token, request.password)
-        await db.commit()
         return UserResponse.from_orm(user)
     except ValueError as e:
         error_msg = str(e)
@@ -85,7 +84,6 @@ async def resend_invitation(
         await service.resend_invitation(
             request.user_id, principal.organization_id, principal.user_id
         )
-        await db.commit()
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

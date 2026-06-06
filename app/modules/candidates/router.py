@@ -82,7 +82,6 @@ async def create_candidate(
             created_by=principal.user_id,
             background_tasks=background_tasks,
         )
-        await db.commit()
 
         # Decrypt PII for response
         decrypted = await service.decrypt_candidate(candidate)
@@ -280,8 +279,6 @@ async def update_candidate(
                 updated_by=principal.user_id,
                 background_tasks=background_tasks,
             )
-
-        await db.commit()
 
         # Decrypt PII for response
         decrypted = await service.decrypt_candidate(candidate)

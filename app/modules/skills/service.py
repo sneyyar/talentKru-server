@@ -13,6 +13,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.decorators import transactional, read_only
 from app.modules.skills.models import (
     Domain,
     Skill,
@@ -36,6 +37,7 @@ class SkillService:
         """
         self.db = db
 
+    @transactional()
     async def create_domain(
         self,
         name: str,
@@ -73,6 +75,7 @@ class SkillService:
         await self.db.flush()
         return domain
 
+    @transactional()
     async def create_skill(
         self,
         domain_id: UUID,
@@ -113,6 +116,7 @@ class SkillService:
         await self.db.flush()
         return skill
 
+    @transactional(name="match_and_link_skills")
     async def match_and_link_skills(
         self,
         candidate_id: UUID,
@@ -187,6 +191,7 @@ class SkillService:
 
         await self.db.flush()
 
+    @transactional()
     async def add_candidate_skill(
         self,
         candidate_id: UUID,

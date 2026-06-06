@@ -75,8 +75,6 @@ async def upload_resume(
         background_tasks=background_tasks,
     )  # type: ignore[arg-type]
     
-    await db.commit()
-    
     return ResumeUploadResponse(
         resume_id=resume.resume_id,
         parse_status=resume.parse_status,

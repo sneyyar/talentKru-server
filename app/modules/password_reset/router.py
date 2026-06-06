@@ -56,7 +56,6 @@ async def request_password_reset(
     # Note: org_id determination would come from request context/tenant header in production
     # For now, we search across all organizations (or use a placeholder)
     await service.request_reset(request.email)
-    await db.commit()
     
     return {"message": "If the email exists, a password reset link has been sent"}
 
@@ -100,7 +99,6 @@ async def confirm_password_reset(
     
     try:
         user = await service.confirm_reset(request.token, request.new_password)
-        await db.commit()
         return UserResponse.from_orm(user)
     except ValueError as e:
         error_msg = str(e)

@@ -77,7 +77,6 @@ async def create_requisition(
         background_tasks=background_tasks,
     )
     
-    await db.commit()
     return RequisitionResponse.from_orm(requisition)
 
 
@@ -210,7 +209,6 @@ async def update_requisition(
         background_tasks=background_tasks,
     )
     
-    await db.commit()
     return RequisitionResponse.from_orm(requisition)
 
 
@@ -253,8 +251,6 @@ async def associate_candidate(
         org_id=principal.organization_id,
         created_by=principal.user_id,
     )
-    
-    await db.commit()
     
     return {
         "candidate_requisition_id": str(candidate_requisition.candidate_requisition_id),
@@ -305,8 +301,6 @@ async def add_required_skill(
         weight=request.weight,
         created_by=principal.user_id,
     )
-    
-    await db.commit()
     
     return {
         "requisition_required_skill_id": str(required_skill.requisition_required_skill_id),

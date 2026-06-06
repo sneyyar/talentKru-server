@@ -24,6 +24,7 @@ from app.modules.skills.models import CandidateSkill, Skill, Domain
 from app.audit_models import AuditLog
 from app.observability.logging import get_logger
 from app.crypto import decrypt_field
+from app.decorators import transactional, read_only
 
 logger = get_logger(__name__)
 
@@ -34,6 +35,7 @@ class PrivacyService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @transactional(name="process_access_dsar")
     async def process_access_dsar(
         self,
         dsar: DataSubjectAccessRequest,
@@ -180,6 +182,7 @@ class PrivacyService:
         
         return compiled_data
 
+    @transactional(name="process_erasure_dsar")
     async def process_erasure_dsar(
         self,
         dsar: DataSubjectAccessRequest,
@@ -257,6 +260,7 @@ class PrivacyService:
             candidate_id=str(dsar.candidate_id),
         )
 
+    @transactional()
     async def deny_dsar(
         self,
         dsar: DataSubjectAccessRequest,
@@ -290,6 +294,7 @@ class PrivacyService:
             denied_by=str(denied_by),
         )
 
+    @read_only
     async def list_dsars(
         self,
         org_id: UUID,
@@ -347,6 +352,7 @@ class PrivacyService:
         
         return dsars, total_count
 
+    @read_only
     async def get_retention_policy(
         self,
         org_id: UUID,
@@ -374,6 +380,7 @@ class PrivacyService:
         
         return policy
 
+    @transactional()
     async def update_retention_policy(
         self,
         org_id: UUID,
@@ -420,6 +427,7 @@ class PrivacyService:
         
         return policy
 
+    @transactional(name="run_retention_purge")
     async def run_retention_purge(self) -> dict:
         """
         Run retention policy purge.

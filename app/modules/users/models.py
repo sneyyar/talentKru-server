@@ -81,14 +81,18 @@ class User(Base, AuditMixin, VersionMixin):
 
     # Relationships
     user_roles = relationship(
-        "UserRole", back_populates="user", lazy="selectin"
+        "UserRole",
+        back_populates="user",
+        lazy="selectin",
+        foreign_keys="UserRole.user_id",
+        viewonly=False,
     )
     password_history = relationship(
         "PasswordHistory",
         back_populates="user",
         order_by="PasswordHistory.created_at.desc()",
     )
-    refresh_tokens = relationship("RefreshToken", back_populates="user")
+    refresh_tokens = relationship("RefreshToken", back_populates="user", viewonly=False)
 
     __table_args__ = (
         UniqueConstraint(

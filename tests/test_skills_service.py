@@ -37,17 +37,18 @@ from app.modules.skills.service import SkillService
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_create_domain_success(db_session: AsyncSession):
+async def test_create_domain_success(db_session: AsyncSession, test_run_id):
     """
     create_domain successfully creates a new domain with unique name.
 
     Validates: Requirements 3.1
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
+    domain_name = f"Python-{test_run_id}"
+    domain = await service.create_domain(domain_name)
 
     assert domain.domain_id is not None
-    assert domain.name == "Python"
+    assert domain.name == domain_name
     assert domain.deleted_at is None
 
     # Verify it was persisted
@@ -56,21 +57,22 @@ async def test_create_domain_success(db_session: AsyncSession):
     )
     persisted = result.scalar_one_or_none()
     assert persisted is not None
-    assert persisted.name == "Python"
+    assert persisted.name == domain_name
 
 
 @pytest.mark.asyncio
-async def test_create_domain_duplicate_name(db_session: AsyncSession):
+async def test_create_domain_duplicate_name(db_session: AsyncSession, test_run_id):
     """
     create_domain raises 409 when domain name already exists.
 
     Validates: Requirements 3.1
     """
     service = SkillService(db_session)
-    await service.create_domain("Python")
+    domain_name = f"Python-{test_run_id}"
+    await service.create_domain(domain_name)
 
     with pytest.raises(HTTPException) as exc_info:
-        await service.create_domain("Python")
+        await service.create_domain(domain_name)
 
     assert exc_info.value.status_code == status.HTTP_409_CONFLICT
     assert "already exists" in exc_info.value.detail
@@ -81,53 +83,55 @@ async def test_create_domain_duplicate_name(db_session: AsyncSession):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_create_skill_success(db_session: AsyncSession):
+async def test_create_skill_success(db_session: AsyncSession, test_run_id):
     """
     create_skill successfully creates a new skill within a domain.
 
     Validates: Requirements 3.1
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
-    skill = await service.create_skill(domain.domain_id, "Django")
+    domain = await service.create_domain(f"Python-{test_run_id}")
+    skill = await service.create_skill(domain.domain_id, f"Django-{test_run_id}")
 
     assert skill.skill_id is not None
     assert skill.domain_id == domain.domain_id
-    assert skill.name == "Django"
+    assert skill.name == f"Django-{test_run_id}"
     assert skill.deleted_at is None
 
 
 @pytest.mark.asyncio
-async def test_create_skill_duplicate_in_domain(db_session: AsyncSession):
+async def test_create_skill_duplicate_in_domain(db_session: AsyncSession, test_run_id):
     """
     create_skill raises 409 when (domain_id, name) already exists.
 
     Validates: Requirements 3.1
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
-    await service.create_skill(domain.domain_id, "Django")
+    domain = await service.create_domain(f"Python-{test_run_id}")
+    skill_name = f"Django-{test_run_id}"
+    await service.create_skill(domain.domain_id, skill_name)
 
     with pytest.raises(HTTPException) as exc_info:
-        await service.create_skill(domain.domain_id, "Django")
+        await service.create_skill(domain.domain_id, skill_name)
 
     assert exc_info.value.status_code == status.HTTP_409_CONFLICT
     assert "already exists" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
-async def test_create_skill_same_name_different_domain(db_session: AsyncSession):
+async def test_create_skill_same_name_different_domain(db_session: AsyncSession, test_run_id):
     """
     create_skill allows same skill name in different domains.
 
     Validates: Requirements 3.1
     """
     service = SkillService(db_session)
-    domain1 = await service.create_domain("Python")
-    domain2 = await service.create_domain("JavaScript")
+    domain1 = await service.create_domain(f"Python-{test_run_id}")
+    domain2 = await service.create_domain(f"JavaScript-{test_run_id}")
 
-    skill1 = await service.create_skill(domain1.domain_id, "Testing")
-    skill2 = await service.create_skill(domain2.domain_id, "Testing")
+    skill_name = f"Testing-{test_run_id}"
+    skill1 = await service.create_skill(domain1.domain_id, skill_name)
+    skill2 = await service.create_skill(domain2.domain_id, skill_name)
 
     assert skill1.skill_id != skill2.skill_id
     assert skill1.domain_id == domain1.domain_id
@@ -139,15 +143,15 @@ async def test_create_skill_same_name_different_domain(db_session: AsyncSession)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_add_candidate_skill_success(db_session: AsyncSession):
+async def test_add_candidate_skill_success(db_session: AsyncSession, test_run_id):
     """
     add_candidate_skill successfully adds a skill to a candidate.
 
     Validates: Requirements 3.2
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
-    skill = await service.create_skill(domain.domain_id, "Django")
+    domain = await service.create_domain(f"Python-{test_run_id}")
+    skill = await service.create_skill(domain.domain_id, f"Django-{test_run_id}")
 
     candidate_id = uuid.uuid4()
     candidate_skill = await service.add_candidate_skill(
@@ -166,15 +170,15 @@ async def test_add_candidate_skill_success(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_add_candidate_skill_invalid_proficiency_rank_low(db_session: AsyncSession):
+async def test_add_candidate_skill_invalid_proficiency_rank_low(db_session: AsyncSession, test_run_id):
     """
     add_candidate_skill raises 422 when proficiency_rank < 1.
 
     Validates: Requirements 3.2
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
-    skill = await service.create_skill(domain.domain_id, "Django")
+    domain = await service.create_domain(f"Python-{test_run_id}")
+    skill = await service.create_skill(domain.domain_id, f"Django-{test_run_id}")
 
     with pytest.raises(HTTPException) as exc_info:
         await service.add_candidate_skill(
@@ -189,15 +193,15 @@ async def test_add_candidate_skill_invalid_proficiency_rank_low(db_session: Asyn
 
 
 @pytest.mark.asyncio
-async def test_add_candidate_skill_invalid_proficiency_rank_high(db_session: AsyncSession):
+async def test_add_candidate_skill_invalid_proficiency_rank_high(db_session: AsyncSession, test_run_id):
     """
     add_candidate_skill raises 422 when proficiency_rank > 5.
 
     Validates: Requirements 3.2
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
-    skill = await service.create_skill(domain.domain_id, "Django")
+    domain = await service.create_domain(f"Python-{test_run_id}")
+    skill = await service.create_skill(domain.domain_id, f"Django-{test_run_id}")
 
     with pytest.raises(HTTPException) as exc_info:
         await service.add_candidate_skill(
@@ -212,15 +216,15 @@ async def test_add_candidate_skill_invalid_proficiency_rank_high(db_session: Asy
 
 
 @pytest.mark.asyncio
-async def test_add_candidate_skill_invalid_years_low(db_session: AsyncSession):
+async def test_add_candidate_skill_invalid_years_low(db_session: AsyncSession, test_run_id):
     """
     add_candidate_skill raises 422 when years_of_experience < 0.
 
     Validates: Requirements 3.2
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
-    skill = await service.create_skill(domain.domain_id, "Django")
+    domain = await service.create_domain(f"Python-{test_run_id}")
+    skill = await service.create_skill(domain.domain_id, f"Django-{test_run_id}")
 
     with pytest.raises(HTTPException) as exc_info:
         await service.add_candidate_skill(
@@ -235,15 +239,15 @@ async def test_add_candidate_skill_invalid_years_low(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_add_candidate_skill_invalid_years_high(db_session: AsyncSession):
+async def test_add_candidate_skill_invalid_years_high(db_session: AsyncSession, test_run_id):
     """
     add_candidate_skill raises 422 when years_of_experience > 50.
 
     Validates: Requirements 3.2
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
-    skill = await service.create_skill(domain.domain_id, "Django")
+    domain = await service.create_domain(f"Python-{test_run_id}")
+    skill = await service.create_skill(domain.domain_id, f"Django-{test_run_id}")
 
     with pytest.raises(HTTPException) as exc_info:
         await service.add_candidate_skill(
@@ -258,15 +262,15 @@ async def test_add_candidate_skill_invalid_years_high(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_add_candidate_skill_duplicate(db_session: AsyncSession):
+async def test_add_candidate_skill_duplicate(db_session: AsyncSession, test_run_id):
     """
     add_candidate_skill raises 409 when candidate already has the skill.
 
     Validates: Requirements 3.2
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
-    skill = await service.create_skill(domain.domain_id, "Django")
+    domain = await service.create_domain(f"Python-{test_run_id}")
+    skill = await service.create_skill(domain.domain_id, f"Django-{test_run_id}")
     candidate_id = uuid.uuid4()
 
     await service.add_candidate_skill(
@@ -293,15 +297,15 @@ async def test_add_candidate_skill_duplicate(db_session: AsyncSession):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_match_and_link_skills_matched(db_session: AsyncSession):
+async def test_match_and_link_skills_matched(db_session: AsyncSession, test_run_id):
     """
     match_and_link_skills creates CandidateSkill for matched skills.
 
     Validates: Requirements 3.4
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
-    skill = await service.create_skill(domain.domain_id, "Django")
+    domain = await service.create_domain(f"Python-{test_run_id}")
+    skill = await service.create_skill(domain.domain_id, f"Django-{test_run_id}")
 
     candidate_id = uuid.uuid4()
     org_id = uuid.uuid4()
@@ -309,7 +313,7 @@ async def test_match_and_link_skills_matched(db_session: AsyncSession):
     await service.match_and_link_skills(
         candidate_id=candidate_id,
         org_id=org_id,
-        extracted_skills=["Django"],
+        extracted_skills=[f"Django-{test_run_id}"],
     )
 
     result = await db_session.execute(
@@ -391,16 +395,16 @@ async def test_match_and_link_skills_zero_skills(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_match_and_link_skills_mixed(db_session: AsyncSession):
+async def test_match_and_link_skills_mixed(db_session: AsyncSession, test_run_id):
     """
     match_and_link_skills handles both matched and unmatched skills.
 
     Validates: Requirements 3.4, 3.5
     """
     service = SkillService(db_session)
-    domain = await service.create_domain("Python")
-    skill1 = await service.create_skill(domain.domain_id, "Django")
-    skill2 = await service.create_skill(domain.domain_id, "Flask")
+    domain = await service.create_domain(f"Python-{test_run_id}")
+    skill1 = await service.create_skill(domain.domain_id, f"Django-{test_run_id}")
+    skill2 = await service.create_skill(domain.domain_id, f"Flask-{test_run_id}")
 
     candidate_id = uuid.uuid4()
     org_id = uuid.uuid4()
@@ -408,7 +412,7 @@ async def test_match_and_link_skills_mixed(db_session: AsyncSession):
     await service.match_and_link_skills(
         candidate_id=candidate_id,
         org_id=org_id,
-        extracted_skills=["Django", "UnknownSkill", "Flask"],
+        extracted_skills=[f"Django-{test_run_id}", "UnknownSkill", f"Flask-{test_run_id}"],
     )
 
     # Check matched skills

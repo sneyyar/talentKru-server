@@ -77,7 +77,6 @@ async def create_job_posting_endpoint(
         salary_currency=request.salary_currency,
         sourcing_channel=request.sourcing_channel,
     )
-    await db.commit()
     return JobPostingResponse.from_orm(job_posting)
 
 
@@ -242,7 +241,6 @@ async def update_job_posting_endpoint(
         salary_currency=request.salary_currency,
         sourcing_channel=request.sourcing_channel,
     )
-    await db.commit()
     return JobPostingResponse.from_orm(job_posting)
 
 
@@ -286,4 +284,3 @@ async def delete_job_posting_endpoint(
         posting_id=job_posting_id,
         org_id=principal.organization_id,
     )
-    await db.commit()

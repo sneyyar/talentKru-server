@@ -137,8 +137,6 @@ async def process_dsar(
             detail="Invalid DSAR request type",
         )
     
-    await db.commit()
-    
     return DSARManageResponse.from_orm(dsar)
 
 
@@ -195,8 +193,6 @@ async def deny_dsar(
         denial_reason=request.denial_reason,
         denied_by=principal.user_id,
     )
-    
-    await db.commit()
     
     return DSARManageResponse.from_orm(dsar)
 
@@ -262,7 +258,5 @@ async def update_retention_policy(
         audit_log_retention_days=request.audit_log_retention_days,
         updated_by=principal.user_id,
     )
-    
-    await db.commit()
     
     return RetentionPolicyResponse.from_orm(policy)

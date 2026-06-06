@@ -446,7 +446,7 @@ class TestDSARDenialMinimumLengthProperties:
             assert dsar.denial_reason == reason
 
     @given(reason=st.text(min_size=10, max_size=1000, alphabet=st.characters(blacklist_categories=("Cc", "Cs"))))
-    @hypothesis_settings(max_examples=50)
+    @hypothesis_settings(max_examples=50, database=None)
     @pytest.mark.asyncio
     async def test_valid_denial_reason_accepted(self, reason: str):
         """

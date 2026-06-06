@@ -12,8 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import AsyncSessionFactory
-from app.modules.resumes.models import Resume, ParseStatus
+from app.decorators import transactional, read_only
+from app.modules.resumes.models import Resume, ParseStatus, CandidateJobHistory
 from app.modules.resumes.storage import StorageService, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES
+from app.modules.candidates.service import CandidateService
+from app.modules.skills.service import SkillService
+from app.modules.candidates.models import Candidate
 from app.observability.logging import get_logger
 from app.observability.middleware import correlation_id_var
 
@@ -57,6 +61,7 @@ class ResumeService:
                 detail=f"File size {file_size} bytes exceeds maximum of 10 MB ({MAX_FILE_SIZE_BYTES} bytes)",
             )
 
+    @transactional()
     async def upload_resume(
         self,
         file_bytes: bytes,
@@ -225,11 +230,6 @@ async def _apply_ingestion_results(
         org_id: Organization ID
         db: AsyncSession for database operations
     """
-    from app.modules.candidates.service import CandidateService
-    from app.modules import skills
-    from app.modules.candidates.models import Candidate
-    from app.modules.resumes.models import CandidateJobHistory
-
     # Extract parsed fields
     extracted_name = parsed_data.get("name")
     extracted_email = parsed_data.get("email")
@@ -294,8 +294,8 @@ async def _apply_ingestion_results(
 
     # Requirement 2.6, 3.5, 3.6: Match and link skills
     if candidate and skills_list:
-        await skills.match_and_link_skills(
-            db=db,
+        skills_service = SkillService(db)
+        await skills_service.match_and_link_skills(
             candidate_id=candidate.candidate_id,
             org_id=org_id,
             extracted_skills=skills_list,

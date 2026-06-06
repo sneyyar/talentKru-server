@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import write_audit_log
+from app.decorators import transactional, read_only
 from app.email_service import get_email_service
 from app.modules.invitations.models import InvitationToken
 from app.modules.users.models import PasswordHistory, User, UserStatus
@@ -44,6 +45,7 @@ class InvitationService:
         """
         self.db = db
 
+    @transactional(name="generate_invitation")
     async def generate_invitation(self, user_id: UUID) -> str:
         """
         Generate an invitation token for a user.
@@ -71,6 +73,7 @@ class InvitationService:
         
         return raw_token
 
+    @read_only
     async def send_invitation_email(
         self, user: User, token: str, org_name: str
     ) -> bool:
@@ -144,6 +147,7 @@ The TalentKru.ai Team
             html_body=html_body,
         )
 
+    @transactional(name="accept_invitation")
     async def accept_invitation(
         self, token: str, password: str
     ) -> User:
@@ -227,6 +231,7 @@ The TalentKru.ai Team
         
         return user
 
+    @transactional(name="resend_invitation")
     async def resend_invitation(
         self, user_id: UUID, org_id: UUID, actor_id: UUID
     ) -> str:

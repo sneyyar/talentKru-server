@@ -79,7 +79,6 @@ async def create_job_profile_endpoint(
         data=request,
         created_by=principal.user_id,
     )
-    await db.commit()
     return JobProfileResponse.from_orm(job_profile)
 
 
@@ -247,7 +246,6 @@ async def update_job_profile_endpoint(
         name=request.name,
         skills=request.skills,
     )
-    await db.commit()
     return JobProfileResponse.from_orm(job_profile)
 
 
@@ -294,4 +292,3 @@ async def delete_job_profile_endpoint(
         job_profile_id=job_profile_id,
         deleted_by=principal.user_id,
     )
-    await db.commit()

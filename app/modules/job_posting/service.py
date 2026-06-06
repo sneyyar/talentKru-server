@@ -16,6 +16,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
+from app.decorators import transactional, read_only
 from app.modules.job_posting.models import JobPosting
 from app.modules.job_profile.models import JobProfile
 
@@ -36,6 +37,7 @@ class JobPostingService:
         """
         self.db = db
 
+    @transactional()
     async def create_posting(
         self,
         org_id: UUID,
@@ -99,6 +101,7 @@ class JobPostingService:
         
         return posting
 
+    @read_only
     async def list_postings(
         self,
         org_id: UUID,
@@ -163,6 +166,7 @@ class JobPostingService:
         result = await self.db.execute(stmt)
         return cast(list[JobPosting], result.scalars().all())  # type: ignore[assignment]
 
+    @transactional()
     async def update_posting(
         self,
         posting_id: UUID,
@@ -238,6 +242,7 @@ class JobPostingService:
         await self.db.flush()
         return posting
 
+    @transactional()
     async def delete_posting(
         self,
         posting_id: UUID,
@@ -287,6 +292,7 @@ class JobPostingService:
         
         await self.db.flush()
 
+    @read_only
     async def get_posting(
         self,
         posting_id: UUID,

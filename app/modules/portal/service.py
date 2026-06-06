@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.privacy.models import DataSubjectAccessRequest, DSARStatus, DSARRequestType
 from app.observability.logging import get_logger
+from app.decorators import transactional
 
 logger = get_logger(__name__)
 
@@ -21,6 +22,7 @@ class PortalService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @transactional()
     async def create_dsar(
         self,
         candidate_id: UUID,

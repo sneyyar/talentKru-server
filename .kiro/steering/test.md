@@ -1,16 +1,42 @@
 # Testing Guide
 
-**Last Updated:** May 31, 2026
+**Last Updated:** June 6, 2026
 
 ## Overview
 
-TalentKru.ai uses **PostgreSQL** for all database and integration tests, not SQLite. Tests connect to a dedicated test database using environment variables from `.env`, ensuring consistency with production behavior and supporting advanced features like pgvector for semantic search.
+TalentKru.ai uses **PostgreSQL** for all database and integration tests. Tests connect to a dedicated test database using environment variables from `.env` (separate from production `DATABASE_*` variables), ensuring consistency with production behavior and supporting advanced features like pgvector.
+
+### Why PostgreSQL?
+- Feature parity with production
+- pgvector support for semantic search
+- Advanced features (constraints, triggers, extensions) work identically
+- Foreign keys and relationships validated
+- Realistic performance characteristics
+
+## Test Architecture
+
+### Stable Design (Implemented June 6, 2026)
+
+Tests use a **three-layer architecture** with no per-test rollbacks:
+
+**Layer 1: Session-Scoped Initialization**
+- `test_suite_init` fixture cleans database at suite start and end (via psql)
+- Prevents cross-suite data pollution
+
+**Layer 2: Function-Scoped Sessions**
+- Fresh `db_session` per test with `expire_on_commit=False`
+- StaticPool for test isolation
+- No automatic rollback (data persists by design)
+
+**Layer 3: Test Data Isolation**
+- `test_run_id` fixture generates unique IDs: `{test_name}-{timestamp}`
+- Use in all unique fields to prevent conflicts across runs
+
+**Result**: Tests run sequentially without interference; fully production-like (real commits).
 
 ## Test Database Configuration
 
 ### Environment Variables
-
-Tests use these environment variables from `.env`:
 
 ```zsh
 TEST_DATABASE_HOST=localhost
@@ -20,314 +46,163 @@ TEST_DATABASE_USER=kru_test
 TEST_DATABASE_PASSWORD=kruTest2026
 ```
 
-These are **separate** from production variables (`DATABASE_*`), allowing tests to run without affecting production data. Both databases exist in the **same PostgreSQL instance** for simplicity.
+**Note**: These are separate from production `DATABASE_*` variables.
 
-### Why PostgreSQL for Tests?
-
-1. **Feature Parity**: Tests run against the same database engine as production
-2. **pgvector Support**: Semantic search and vector operations work identically
-3. **Advanced Features**: Constraints, triggers, and extensions behave as in production
-4. **Data Integrity**: Foreign keys and complex relationships are validated
-5. **Performance**: Realistic performance characteristics for benchmarking
-
-## Setting Up Test Database
-
-### Quick Setup (Recommended)
+## Setup
 
 ```zsh
-# 1. Start PostgreSQL container (hosts both dev and test databases)
-uv run invoke db-start
-
-# 2. Initialize main database users
-uv run invoke db-init-users
-
-# 3. Apply migrations to main database
-uv run invoke migrate
-
-# 4. Initialize test database (creates test DB in same instance)
-uv run invoke db-init-test
-
-# 5. Run tests
-uv run invoke test
+# Quick setup
+uv run invoke db-start              # Start PostgreSQL
+uv run invoke db-init-users         # Initialize main database
+uv run invoke migrate               # Apply migrations to main database
+uv run invoke db-init-test          # Initialize test database
+uv run invoke test                  # Run tests
 ```
 
-The `db-init-test` task:
-- Connects to the existing PostgreSQL instance
-- Creates test database and test user
-- Applies all migrations to test database
-- Keeps test data isolated from production in separate database
-
-### Manual Setup
-
-If you prefer manual control:
-
-```zsh
-# 1. Start PostgreSQL container (if not already running)
-uv run invoke db-start
-
-# 2. Create test database
-PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE kru_test_db;"
-
-# 3. Create test user and schema
-PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d kru_test_db -c "
-  CREATE USER kru_test WITH PASSWORD 'kruTest2026';
-  GRANT CONNECT ON DATABASE kru_test_db TO kru_test;
-  CREATE SCHEMA talentkru_test AUTHORIZATION kru_test;
-  ALTER USER kru_test SET search_path TO talentkru_test, public;
-"
-
-# 4. Apply migrations to test database
-DATABASE_HOST=localhost \
-DATABASE_PORT=5432 \
-DATABASE_NAME=kru_test_db \
-DATABASE_USER=kru_test \
-DATABASE_PASSWORD=kruTest2026 \
-uv run alembic upgrade head
-
-# 5. Run tests
-uv run invoke test
-```
+For manual setup, see [Tech Stack Guide - Database Management](./tech.md#database-management).
 
 ## Running Tests
 
-### All Tests
-
 ```zsh
-# Run entire test suite
+# All tests
 uv run invoke test
 
-# Run with verbose output
-uv run invoke test --verbose
-
-# Run with coverage report
+# With coverage
 uv run invoke test-cov
 
-# Run in watch mode (re-runs on file changes)
-uv run invoke test-watch
-```
-
-### Specific Tests
-
-```zsh
-# Run specific test file
-uv run invoke test --path tests/test_auth_service.py
-
-# Run specific test function
-uv run invoke test --path tests/test_auth_service.py::test_login
-
-# Run tests matching a pattern
-uv run pytest -k "test_candidate" --tb=short
-
-# Run only integration tests
-uv run pytest -m integration
-
-# Run only unit tests
-uv run pytest -m unit
-```
-
-### With Coverage
-
-```zsh
-# Generate coverage report
-uv run invoke test-cov
-
-# View HTML coverage report
-open htmlcov/index.html
-
-# Coverage with specific file
-uv run pytest --cov=app.modules.auth --cov-report=html tests/test_auth_service.py
-```
-
-### Watch Mode
-
-```zsh
-# Re-run tests on file changes
+# Watch mode (re-runs on changes)
 uv run invoke test-watch
 
-# Watch specific test file
-uv run pytest-watch tests/test_auth_service.py
+# Specific file
+uv run pytest tests/test_auth_service.py -v
+
+# Specific test
+uv run pytest tests/test_auth_service.py::test_login -v
+
+# Pattern matching
+uv run pytest -k "test_candidate" -v
 ```
-
-## Test Database Lifecycle
-
-### Before Each Test
-- Database session is created
-- Test fixtures are initialized
-- Organization and user fixtures are created
-
-### During Test
-- Test executes with isolated database session
-- All queries run against test database
-- Transactions are active
-
-### After Each Test
-- Session is rolled back automatically
-- Test data is cleaned up
-- Database returns to clean state
-
-This rollback mechanism ensures tests don't interfere with each other.
 
 ## Test Fixtures
 
-### Available Fixtures (conftest.py)
+### Core Fixtures (conftest.py)
+
+- `db_session`: Fresh AsyncSession per test (function-scoped, no cleanup)
+- `test_run_id`: Unique ID per test; use as `f"{data}-{test_run_id}"` for uniqueness
+- `org_id`: Test organization UUID
+- `user_id`, `recruiter_user`, `admin_user`, `hiring_manager_user`: Test user UUIDs
+
+### Example Usage
 
 ```python
-@pytest.fixture
-async def db_session(async_session_factory):
-    """Provides a database session for the test."""
-    # Automatically rolls back after test
-    yield session
-
-@pytest.fixture
-async def org_id(db_session):
-    """Creates a test organization and returns its ID."""
-    yield org_id
-
-@pytest.fixture
-async def user_id(db_session, org_id):
-    """Creates a test user and returns its ID."""
-    yield user_id
-
-@pytest.fixture
-async def recruiter_user(db_session, org_id):
-    """Creates a recruiter user."""
-    yield recruiter_id
-
-@pytest.fixture
-async def admin_user(db_session, org_id):
-    """Creates an admin user."""
-    yield admin_id
-
-@pytest.fixture
-async def hiring_manager_user(db_session, org_id):
-    """Creates a hiring manager user."""
-    yield hiring_manager_id
-```
-
-### Using Fixtures in Tests
-
-```python
-import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 @pytest.mark.asyncio
-async def test_create_candidate(db_session: AsyncSession, org_id):
-    """Test candidate creation."""
-    candidate = Candidate(
-        organization_id=org_id,
-        first_name="John",
-        last_name="Doe"
-    )
-    db_session.add(candidate)
-    await db_session.flush()
+async def test_create_domain(db_session: AsyncSession, test_run_id):
+    """Test domain creation with unique data."""
+    service = SkillService(db_session)
+    # Use test_run_id for unique data
+    name = f"Python-{test_run_id}"
+    domain = await service.create_domain(name)
     
-    assert candidate.candidate_id is not None
+    assert domain.domain_id is not None
+    assert domain.name == name
 ```
 
 ## Writing Tests
 
-### Basic Test Template
+**Key Principle**: Use `test_run_id` to create unique data so tests don't interfere.
+
+### Basic Pattern
 
 ```python
-import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import uuid4
-
 @pytest.mark.asyncio
-async def test_example_functionality(db_session: AsyncSession, org_id):
+async def test_create_item(db_session: AsyncSession, test_run_id):
     """Test description."""
-    # Arrange: Set up test data
-    test_data = {
-        "organization_id": org_id,
-        "name": "Test Item",
-    }
+    service = MyService(db_session)
     
-    # Act: Execute the code being tested
-    result = await some_service.create_item(db_session, **test_data)
+    # Arrange: Create unique test data
+    item_name = f"TestItem-{test_run_id}"
     
-    # Assert: Verify the results
-    assert result.name == "Test Item"
-    assert result.organization_id == org_id
+    # Act: Call service (commits automatically)
+    result = await service.create_item(item_name)
+    
+    # Assert: Verify results (object attributes accessible)
+    assert result.id is not None
+    assert result.name == item_name
 ```
 
-### Async Test Pattern
-
-All tests must use `@pytest.mark.asyncio` decorator:
+### Error Testing
 
 ```python
 @pytest.mark.asyncio
-async def test_async_operation(db_session: AsyncSession):
-    """Test async database operation."""
-    result = await db_session.execute(select(User))
-    users = result.scalars().all()
-    assert len(users) >= 0
+async def test_duplicate_error(db_session: AsyncSession, test_run_id):
+    """Test 409 conflict on duplicate."""
+    service = MyService(db_session)
+    name = f"TestItem-{test_run_id}"
+    
+    await service.create_item(name)
+    
+    with pytest.raises(HTTPException) as exc_info:
+        await service.create_item(name)
+    
+    assert exc_info.value.status_code == status.HTTP_409_CONFLICT
 ```
 
-### Integration Test Pattern
+### Complex Operations
 
 ```python
 @pytest.mark.asyncio
-@pytest.mark.integration
-async def test_full_workflow(db_session: AsyncSession, org_id):
-    """Test complete workflow across multiple services."""
-    # Create candidate
-    candidate = Candidate(organization_id=org_id, first_name="John")
-    db_session.add(candidate)
-    await db_session.flush()
+async def test_workflow(db_session: AsyncSession, test_run_id, org_id):
+    """Test multi-step workflow."""
+    from sqlalchemy import select
     
-    # Upload resume
-    resume = Resume(candidate_id=candidate.candidate_id, file_path="test.pdf")
-    db_session.add(resume)
-    await db_session.flush()
+    service = MyService(db_session)
     
-    # Extract skills
-    skills = await skill_service.extract_skills(db_session, resume.resume_id)
+    # Create related data with unique identifiers
+    item1 = await service.create_item(f"Item1-{test_run_id}", org_id)
+    item2 = await service.create_item(f"Item2-{test_run_id}", org_id)
     
-    assert len(skills) > 0
-```
-
-### Property-Based Testing (Hypothesis)
-
-```python
-from hypothesis import given, strategies as st
-
-@given(
-    first_name=st.text(min_size=1, max_size=100),
-    last_name=st.text(min_size=1, max_size=100),
-)
-@pytest.mark.asyncio
-async def test_candidate_creation_properties(
-    db_session: AsyncSession,
-    org_id,
-    first_name,
-    last_name,
-):
-    """Test candidate creation with various inputs."""
-    candidate = Candidate(
-        organization_id=org_id,
-        first_name=first_name,
-        last_name=last_name,
-    )
-    db_session.add(candidate)
-    await db_session.flush()
+    # Link items
+    result = await service.link_items(item1.id, item2.id)
     
-    assert candidate.first_name == first_name
-    assert candidate.last_name == last_name
+    # Verify via query
+    stmt = select(Item).where(Item.id == item1.id)
+    persisted = await db_session.execute(stmt)
+    assert persisted.scalar_one() is not None
 ```
 
 ## Test Configuration (conftest.py)
 
-### Environment Setup
+### Key Settings
 
-The `conftest.py` file automatically sets required environment variables:
+```toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"  # Critical for fixture scopes
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+```
+
+### Session Factory Configuration
+
+```python
+async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,  # Keeps objects valid after service commits
+    autoflush=True,
+)
+
+create_async_engine(
+    database_url,
+    poolclass=StaticPool,  # Test isolation
+    connect_args={"timeout": 30},
+)
+```
+
+### Environment Variables (Auto-Set in conftest.py)
 
 ```python
 _REQUIRED_ENV = {
-    "DATABASE_HOST": "localhost",
-    "DATABASE_PORT": "5432",
-    "DATABASE_NAME": "talentkru_test",
-    "DATABASE_USER": "test_user",
-    "DATABASE_PASSWORD": "test_password",
     "JWT_SIGNING_KEY": "test-jwt-signing-key",
     "ENCRYPTION_KEY": "test-encryption-key",
     "STORAGE_BACKEND": "local",
@@ -337,263 +212,67 @@ _REQUIRED_ENV = {
 }
 ```
 
-These defaults are overridden by `.env` values if present.
-
-### Customizing Test Configuration
-
-To override test database settings, add to `.env`:
-
-```zsh
-TEST_DATABASE_HOST=localhost
-TEST_DATABASE_PORT=5433
-TEST_DATABASE_NAME=kru_test_db
-TEST_DATABASE_USER=kru_test
-TEST_DATABASE_PASSWORD=kruTest2026
-```
+Defaults overridden by `.env` if present.
 
 ## Troubleshooting
 
-### Test Database Connection Issues
+### Connection Issues
 
 ```zsh
-# Check if PostgreSQL is running
+# Test connection
 docker ps | grep postgresql
 
-# Test connection to main database
-PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d krudb -c "SELECT 1"
-
-# Test connection to test database
+# Verify database exists
 PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d kru_test_db -c "SELECT 1"
-
-# View PostgreSQL container logs
-docker logs local-postgresql-db
-
-# Restart PostgreSQL container
-docker restart local-postgresql-db
 ```
 
-### Tests Hanging or Timing Out
+### Test Failures
 
 ```zsh
-# Increase timeout in pytest.ini or pyproject.toml
-[tool:pytest]
-timeout = 300  # 5 minutes
-
-# Run with verbose output to see where it hangs
+# Run with verbose output
 uv run pytest -v -s tests/test_file.py
 
-# Run single test with debugging
+# Run single test with debugger
 uv run pytest -v -s --pdb tests/test_file.py::test_function
+
+# Check Python cache
+uv run invoke clean
+uv run invoke sync --refresh
 ```
 
 ### Database State Issues
 
 ```zsh
-# Reinitialize test database
+# Reset test database (deletes all test data)
 uv run invoke db-init-test
 
-# Or manually reset test database
+# Or manually reset
 PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d kru_test_db -c "
   DROP SCHEMA IF EXISTS talentkru_test CASCADE;
   CREATE SCHEMA talentkru_test AUTHORIZATION kru_test;
 "
-
-# Then reapply migrations
-DATABASE_HOST=localhost \
-DATABASE_PORT=5432 \
-DATABASE_NAME=kru_test_db \
-DATABASE_USER=kru_test \
-DATABASE_PASSWORD=kruTest2026 \
-uv run alembic upgrade head
 ```
 
-### Import Errors in Tests
+### Data Conflicts on Rerun
 
-```zsh
-# Ensure dependencies are synced
-uv run invoke sync
+**Cause**: Tests creating same data names as previous run.
 
-# Clear Python cache
-uv run invoke clean
-
-# Reinstall dependencies
-uv run invoke sync --refresh
-```
-
-### Async Test Errors
-
-Ensure all async operations use `await`:
+**Solution**: Use `test_run_id` fixture in all unique fields:
 
 ```python
-# ❌ WRONG
-result = db_session.execute(select(User))
+# ❌ Wrong - same name every run
+domain_name = "Python"
 
-# ✅ CORRECT
-result = await db_session.execute(select(User))
-```
-
-## Performance Optimization
-
-### Running Tests in Parallel
-
-```zsh
-# Install pytest-xdist
-uv run invoke add-dev --package pytest-xdist
-
-# Run tests in parallel (4 workers)
-uv run pytest -n 4
-
-# Auto-detect number of CPUs
-uv run pytest -n auto
-```
-
-### Reducing Test Execution Time
-
-```zsh
-# Run only fast tests (skip slow integration tests)
-uv run pytest -m "not slow"
-
-# Run specific test module
-uv run pytest tests/test_auth_service.py
-
-# Stop on first failure
-uv run pytest -x
-
-# Stop after N failures
-uv run pytest --maxfail=3
-```
-
-## Continuous Integration
-
-### GitHub Actions Example
-
-```yaml
-name: Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_PASSWORD: adminA11
-          POSTGRES_DB: krudb
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-      
-      - name: Install uv
-        run: pip install uv
-      
-      - name: Sync dependencies
-        run: uv sync
-      
-      - name: Initialize main database
-        run: |
-          PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d krudb -f db-scripts/create_user.sql
-      
-      - name: Apply migrations to main database
-        run: uv run alembic upgrade head
-        env:
-          DATABASE_HOST: localhost
-          DATABASE_PORT: 5432
-          DATABASE_NAME: krudb
-          DATABASE_USER: talentkru_app
-          DATABASE_PASSWORD: kruApp2026
-      
-      - name: Initialize test database
-        run: |
-          PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE kru_test_db;"
-          PGPASSWORD=adminA11 psql -h localhost -p 5432 -U postgres -d kru_test_db -c "
-            CREATE USER kru_test WITH PASSWORD 'kruTest2026';
-            GRANT CONNECT ON DATABASE kru_test_db TO kru_test;
-            CREATE SCHEMA talentkru_test AUTHORIZATION kru_test;
-            ALTER USER kru_test SET search_path TO talentkru_test, public;
-          "
-      
-      - name: Apply migrations to test database
-        run: uv run alembic upgrade head
-        env:
-          DATABASE_HOST: localhost
-          DATABASE_PORT: 5432
-          DATABASE_NAME: kru_test_db
-          DATABASE_USER: kru_test
-          DATABASE_PASSWORD: kruTest2026
-      
-      - name: Run tests
-        run: uv run invoke test-cov
-        env:
-          TEST_DATABASE_HOST: localhost
-          TEST_DATABASE_PORT: 5432
-          TEST_DATABASE_NAME: kru_test_db
-          TEST_DATABASE_USER: kru_test
-          TEST_DATABASE_PASSWORD: kruTest2026
-```
-
-## Best Practices
-
-### ✅ DO
-
-- Use `@pytest.mark.asyncio` for all async tests
-- Use fixtures for common setup (db_session, org_id, user_id)
-- Test one thing per test function
-- Use descriptive test names: `test_<what>_<when>_<then>`
-- Clean up resources in fixtures (via rollback)
-- Use parametrize for testing multiple scenarios
-- Mock external services (AI API, email, etc.)
-
-### ❌ DON'T
-
-- Use SQLite for tests (use PostgreSQL)
-- Create test data without fixtures
-- Leave test data in database after test
-- Test multiple concerns in one test
-- Use hardcoded UUIDs or timestamps
-- Skip database tests for "speed"
-- Modify `.env` for test configuration (use environment variables)
-
-## Quick Reference
-
-```zsh
-# Setup
-uv run invoke db-start              # Start PostgreSQL (hosts both dev and test)
-uv run invoke db-init-users         # Initialize main database
-uv run invoke migrate               # Apply migrations to main database
-uv run invoke db-init-test          # Setup test database in same instance
-
-# Run Tests
-uv run invoke test                  # Run all tests
-uv run invoke test-cov              # Run with coverage
-uv run invoke test-watch            # Watch mode
-uv run pytest tests/test_file.py    # Specific file
-uv run pytest -k "test_name"        # Pattern matching
-
-# Cleanup
-uv run invoke clean                 # Clean cache
-docker stop local-postgresql-db     # Stop PostgreSQL container
-docker rm local-postgresql-db       # Remove PostgreSQL container
+# ✅ Correct - unique per test
+domain_name = f"Python-{test_run_id}"
 ```
 
 ## References
 
 - [pytest Documentation](https://docs.pytest.org/)
 - [pytest-asyncio Documentation](https://pytest-asyncio.readthedocs.io/)
-- [SQLAlchemy Async Documentation](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
-- [Hypothesis Documentation](https://hypothesis.readthedocs.io/)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+- [SQLAlchemy Async](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
+- Detailed guides in repository:
+  - `TEST_ARCHITECTURE_FIXED.md` - Technical deep-dive
+  - `TEST_FIX_SUMMARY.md` - Quick reference
+  - `TEST_IMPLEMENTATION_GUIDE.md` - Developer guide

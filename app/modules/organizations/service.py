@@ -14,8 +14,10 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.decorators import transactional, read_only
 from app.modules.organizations.models import Organization
 from app.modules.organizations.schemas import OrganizationCreate, OrganizationUpdate
+from app.service_base import atomic_transaction
 
 
 async def _check_slug_unique(
@@ -52,25 +54,26 @@ async def create_organization(data: OrganizationCreate, db: AsyncSession) -> Org
     Raises:
         HTTPException(409): If the slug is already in use.
     """
-    await _check_slug_unique(db, data.slug)
-    org = Organization(
-        name=data.name,
-        slug=data.slug,
-        logo_url=data.logo_url,
-        primary_color=data.primary_color,
-        secondary_color=data.secondary_color,
-        terms_url=data.terms_url,
-        contact_name=data.contact_name,
-        contact_email=str(data.contact_email) if data.contact_email else None,
-        contact_phone=data.contact_phone,
-        feature_flags=data.feature_flags,
-        allowed_origins=data.allowed_origins,
-        shard_id=0,
-    )
-    db.add(org)
-    await db.flush()
-    await db.refresh(org)
-    return org
+    async with atomic_transaction(db, "create_organization"):
+        await _check_slug_unique(db, data.slug)
+        org = Organization(
+            name=data.name,
+            slug=data.slug,
+            logo_url=data.logo_url,
+            primary_color=data.primary_color,
+            secondary_color=data.secondary_color,
+            terms_url=data.terms_url,
+            contact_name=data.contact_name,
+            contact_email=str(data.contact_email) if data.contact_email else None,
+            contact_phone=data.contact_phone,
+            feature_flags=data.feature_flags,
+            allowed_origins=data.allowed_origins,
+            shard_id=0,
+        )
+        db.add(org)
+        await db.flush()
+        await db.refresh(org)
+        return org
 
 
 async def get_organization(org_id: UUID, db: AsyncSession) -> Organization:
@@ -139,18 +142,19 @@ async def update_organization(
         HTTPException(404): If no active organization with the given ID exists.
         HTTPException(409): If the new slug is already in use by another org.
     """
-    org = await get_organization(org_id, db)
-    if data.slug and data.slug != org.slug:
-        await _check_slug_unique(db, data.slug, exclude_id=org_id)
+    async with atomic_transaction(db, "update_organization"):
+        org = await get_organization(org_id, db)
+        if data.slug and data.slug != org.slug:
+            await _check_slug_unique(db, data.slug, exclude_id=org_id)
 
-    # Apply updates for all explicitly provided fields, excluding version
-    # (version is managed by SQLAlchemy's optimistic locking, not set manually)
-    update_data = data.model_dump(exclude_unset=True, exclude={"version"})
-    for field, value in update_data.items():
-        # Always apply JSON/array fields even when None (explicit null is valid)
-        if value is not None or field in ("feature_flags", "allowed_origins"):
-            setattr(org, field, value)
+        # Apply updates for all explicitly provided fields, excluding version
+        # (version is managed by SQLAlchemy's optimistic locking, not set manually)
+        update_data = data.model_dump(exclude_unset=True, exclude={"version"})
+        for field, value in update_data.items():
+            # Always apply JSON/array fields even when None (explicit null is valid)
+            if value is not None or field in ("feature_flags", "allowed_origins"):
+                setattr(org, field, value)
 
-    await db.flush()
-    await db.refresh(org)
-    return org
+        await db.flush()
+        await db.refresh(org)
+        return org

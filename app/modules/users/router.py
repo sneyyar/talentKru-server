@@ -96,7 +96,6 @@ async def create_user(
             actor_id=principal.user_id,
             obo_by=UUID(principal.obo_by) if principal.obo_by else None,
         )
-        await db.commit()
         return UserResponse.from_orm(user)
     except ValueError as e:
         raise HTTPException(
@@ -141,7 +140,6 @@ async def update_user(
             actor_id=principal.user_id,
             obo_by=UUID(principal.obo_by) if principal.obo_by else None,
         )
-        await db.commit()
         return UserResponse.from_orm(user)
     except UserNotFoundError:
         raise HTTPException(
@@ -197,5 +195,3 @@ async def revoke_user_sessions(
         timestamp=datetime.now(timezone.utc),
         db=db,
     )
-    
-    await db.commit()

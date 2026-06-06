@@ -99,7 +99,6 @@ async def create_domain_endpoint(
     try:
         service = SkillService(db)
         domain = await service.create_domain(request.name)
-        await db.commit()
         return DomainResponse.from_orm(domain)
     except HTTPException:
         raise
@@ -200,7 +199,6 @@ async def create_skill_endpoint(
     try:
         service = SkillService(db)
         skill = await service.create_skill(domain_id, request.name)
-        await db.commit()
         return SkillResponse.from_orm(skill)
     except HTTPException:
         raise
@@ -285,7 +283,6 @@ async def add_skill_to_candidate(
             request.proficiency_rank,
             request.years_of_experience,
         )
-        await db.commit()
         return CandidateSkillResponse.from_orm(candidate_skill)
     except HTTPException:
         raise

@@ -56,8 +56,6 @@ async def create_dsar(
         request_type=request.request_type,
     )  # type: ignore[arg-type]
     
-    await db.commit()
-    
     logger.info(
         "dsar_endpoint_success",
         dsar_id=str(dsar.dsar_id),

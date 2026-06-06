@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import write_audit_log
+from app.decorators import transactional, read_only
 from app.email_service import get_email_service
 from app.modules.password_reset.models import PasswordResetToken
 from app.modules.users.models import PasswordHistory, User, UserStatus
@@ -51,6 +52,7 @@ class PasswordResetService:
         self.db = db
         self.revocation_cache = revocation_cache or RevocationCache()
 
+    @transactional(name="request_password_reset")
     async def request_reset(self, email: str, org_id: UUID | None = None) -> None:
         """
         Request a password reset for a user.
@@ -99,6 +101,7 @@ class PasswordResetService:
         # Send email with reset token
         await self._send_password_reset_email(user, raw_token)
 
+    @read_only
     async def _send_password_reset_email(self, user: User, token: str) -> bool:
         """
         Send a password reset email to the user.
@@ -169,6 +172,7 @@ The TalentKru.ai Team
             html_body=html_body,
         )
 
+    @transactional(name="confirm_password_reset")
     async def confirm_reset(
         self, token: str, new_password: str
     ) -> User:

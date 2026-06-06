@@ -1,51 +1,27 @@
-"""Minimal test for candidate service."""
+"""Minimal test for candidate service using PostgreSQL."""
 
 import pytest
+import hashlib
 from uuid import uuid4
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.base_model import Base
 from app.modules.candidates.models import Candidate, GlobalStatus
-from app.domain_events.models import DomainEvent
-
-
-@pytest.fixture
-async def test_db():
-    """Create an in-memory SQLite database for testing."""
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        echo=False,
-        connect_args={"check_same_thread": False},
-    )
-    
-    # Disable foreign key constraints for testing
-    @event.listens_for(engine.sync_engine, "connect")
-    def set_sqlite_pragma(dbapi_conn, connection_record):
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA foreign_keys=OFF")
-        cursor.close()
-    
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    
-    async with async_session() as session:
-        yield session
-    
-    await engine.dispose()
+from app.crypto import encrypt_field
 
 
 @pytest.mark.asyncio
-async def test_candidate_model_creation(test_db: AsyncSession):
-    """Test that we can create a candidate in the database."""
-    from app.crypto import encrypt_field
-    import hashlib
+async def test_candidate_model_creation(db_session: AsyncSession, org_id, test_run_id):
+    """
+    Test that we can create a candidate in the PostgreSQL database.
     
-    org_id = uuid4()
-    name = "Test Candidate"
-    email = "test@example.com"
+    This test verifies:
+    - Candidate creation with encrypted PII fields
+    - Proper hash computation for case-insensitive lookups
+    - Model initialization with correct status
+    """
+    # Use test_run_id to ensure unique data
+    name = f"Test Candidate-{test_run_id}"
+    email = f"test-{test_run_id}-{uuid4().hex[:8]}@example.com"
     
     candidate = Candidate(
         candidate_id=uuid4(),
@@ -59,8 +35,18 @@ async def test_candidate_model_creation(test_db: AsyncSession):
         global_status=GlobalStatus.ACTIVE.value,
     )
     
-    test_db.add(candidate)
-    await test_db.flush()
+    db_session.add(candidate)
+    await db_session.flush()
     
+    # Verify candidate was created successfully
     assert candidate.candidate_id is not None
     assert candidate.global_status == GlobalStatus.ACTIVE.value
+    assert candidate.organization_id == org_id
+    
+    # Verify encrypted fields are not plaintext
+    assert candidate.name != name
+    assert candidate.email != email
+    
+    # Verify hashes are computed correctly
+    assert candidate.name_hash == hashlib.sha256(name.lower().encode()).hexdigest()
+    assert candidate.email_hash == hashlib.sha256(email.lower().encode()).hexdigest()
