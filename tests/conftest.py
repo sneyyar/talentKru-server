@@ -42,6 +42,9 @@ from app.modules.email_config.models import (
     SystemSetting,
     ProviderType,
 )
+from app.modules.candidates.models import Candidate, GlobalStatus
+from app.modules.job_profile.models import JobProfile
+from app.modules.requisitions.models import JobRequisition, RequisitionStatus
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +76,9 @@ _TEST_DB_DEFAULTS = {
 
 for _key, _value in _TEST_DB_DEFAULTS.items():
     os.environ.setdefault(_key, _value)
+
+# Import encrypt_field for use in fixtures
+from app.crypto import encrypt_field
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +157,9 @@ def test_suite_init():
     password = os.getenv("TEST_DATABASE_PASSWORD", "kruTest2026")
     
     cleanup_sql = """
+    DELETE FROM talentkru_test.interview_journeys CASCADE;
+    DELETE FROM talentkru_test.interview_journey_stage_history CASCADE;
+    DELETE FROM talentkru_test.candidate_interview_journeys CASCADE;
     DELETE FROM talentkru_test.candidate_skills CASCADE;
     DELETE FROM talentkru_test.unmatched_skill_reviews CASCADE;
     DELETE FROM talentkru_test.skills CASCADE;
@@ -271,3 +280,126 @@ async def admin_user(db_session: AsyncSession, org_id):
 async def hiring_manager_user(db_session: AsyncSession, org_id):
     """Create a test user with HiringManager role."""
     return uuid4()
+
+
+@pytest.fixture
+def current_user_context(user_id):
+    """
+    Set the current_user_id_var context for the test.
+    
+    This fixture automatically sets the current_user_id_var context variable
+    before each test and resets it afterward. This allows the before_flush
+    listener to properly populate audit fields (created_by, updated_by, deleted_by).
+    
+    Tests that need a different user context can override this by explicitly
+    setting the context variable before calling the service method.
+    """
+    from app.base_model import current_user_id_var
+    
+    token = current_user_id_var.set(str(user_id))
+    yield
+    current_user_id_var.reset(token)
+
+
+@pytest.fixture
+async def test_candidate(db_session: AsyncSession, org_id, current_user_context):
+    """
+    Create a test candidate for use in tests that need candidate records.
+    
+    This fixture creates a minimal candidate with required fields.
+    Use for tests that need to reference candidates via foreign key.
+    """
+    from app.modules.candidates.models import Candidate, GlobalStatus
+    from app.crypto import encrypt_field
+    import hashlib
+    
+    candidate_id = uuid4()
+    name = f"Test Candidate {uuid4().hex[:8]}"
+    email = f"candidate-{uuid4().hex[:8]}@test.com"
+    
+    candidate = Candidate(
+        candidate_id=candidate_id,
+        organization_id=org_id,
+        name=encrypt_field(name),
+        name_hash=hashlib.sha256(name.lower().encode()).hexdigest(),
+        email=encrypt_field(email),
+        email_hash=hashlib.sha256(email.lower().encode()).hexdigest(),
+        global_status=GlobalStatus.ACTIVE.value,
+    )
+    db_session.add(candidate)
+    await db_session.flush()
+    return candidate
+
+
+@pytest.fixture
+async def test_job_profile(db_session: AsyncSession, org_id, current_user_context):
+    """
+    Create a test job profile for use in tests that need job profile records.
+    
+    This fixture creates a minimal job profile with required fields.
+    Use for tests that need to reference job profiles.
+    """
+    from app.modules.job_profile.models import JobProfile
+    
+    job_profile_id = uuid4()
+    job_profile = JobProfile(
+        job_profile_id=job_profile_id,
+        organization_id=org_id,
+        name=f"Test Role {uuid4().hex[:8]}",
+    )
+    db_session.add(job_profile)
+    await db_session.flush()
+    return job_profile
+
+
+@pytest.fixture
+async def test_hiring_manager(db_session: AsyncSession, org_id, current_user_context):
+    """
+    Create a test hiring manager user for job requisitions.
+    
+    This fixture creates a minimal user to serve as a hiring manager.
+    """
+    from app.modules.users.models import User, UserStatus
+    import hashlib
+    
+    user_id = uuid4()
+    email = f"manager-{uuid4().hex[:8]}@test.com"
+    
+    user = User(
+        user_id=user_id,
+        organization_id=org_id,
+        email=encrypt_field(email),
+        email_hash=hashlib.sha256(email.lower().encode()).hexdigest(),
+        given_name=encrypt_field("Test"),
+        last_name=encrypt_field("Manager"),
+        status=UserStatus.ACTIVE.value,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
+
+
+@pytest.fixture
+async def test_job_requisition(db_session: AsyncSession, org_id, test_job_profile, test_hiring_manager, current_user_context):
+    """
+    Create a test job requisition for use in tests that need requisition records.
+    
+    This fixture creates a minimal job requisition with required fields.
+    Use for tests that need to reference requisitions via foreign key.
+    """
+    from app.modules.requisitions.models import JobRequisition, RequisitionStatus
+    
+    job_requisition_id = uuid4()
+    job_requisition = JobRequisition(
+        job_requisition_id=job_requisition_id,
+        organization_id=org_id,
+        job_profile_id=test_job_profile.job_profile_id,
+        title=f"Test Requisition {uuid4().hex[:8]}",
+        department="Engineering",
+        location="Remote",
+        hiring_manager_user_id=test_hiring_manager.user_id,
+        status=RequisitionStatus.OPEN.value,
+    )
+    db_session.add(job_requisition)
+    await db_session.flush()
+    return job_requisition

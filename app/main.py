@@ -18,6 +18,7 @@ from app.modules.agents.router import router as agents_router
 from app.modules.auth.router import router as auth_router, get_revocation_cache
 from app.modules.candidates.router import router as candidates_router
 from app.modules.candidates.service import CandidateService
+from app.modules.feedback.router import router as feedback_router
 from app.modules.interviews.router import router as interviews_router
 from app.modules.invitations.router import router as invitations_router
 from app.modules.job_posting.router import router as job_posting_router
@@ -36,6 +37,7 @@ from app.modules.reporting.router import router as reporting_router
 from app.modules.requisitions.router import router as requisitions_router
 from app.modules.resumes.router import router as resumes_router
 from app.modules.skills.router import router as skills_router
+from app.modules.slots.router import router as slots_router, prefs_router as interviewer_prefs_router
 from app.modules.users.router import router as users_router
 from app.observability.logging import get_logger
 from app.observability.middleware import CorrelationIDMiddleware, correlation_id_var
@@ -225,6 +227,9 @@ app.include_router(job_posting_router, prefix="/api/v1")
 app.include_router(skills_router, prefix="/api/v1")
 app.include_router(matching_router, prefix="/api/v1")
 app.include_router(journeys_router, prefix="/api/v1")
+app.include_router(slots_router, prefix="/api/v1")
+app.include_router(interviewer_prefs_router, prefix="/api/v1")
+app.include_router(feedback_router, prefix="/api/v1")
 app.include_router(interviews_router, prefix="/api/v1")
 app.include_router(questionnaires_router, prefix="/api/v1")
 app.include_router(portal_router, prefix="/api/v1")

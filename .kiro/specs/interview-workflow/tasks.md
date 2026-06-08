@@ -56,7 +56,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - _Requirements: 3.1, 4.1, 5.1, 6.1, 6.2, 7.1, 8.7_
 
 
-- [ ] 4. Implement InterviewJourneyService and journey router
+- [x] 4. Implement InterviewJourneyService and journey router
   - [x] 4.1 Implement `InterviewJourneyService` in `app/modules/journeys/service.py`
     - `create_journey`: generate `journey_public_id = secrets.token_urlsafe(16)` (≥22 URL-safe chars); insert `InterviewJourney(current_stage=SOURCED, overall_status=ACTIVE)`; insert `CandidateInterviewJourney` join record; `await db.flush()`; call `publish_event("journey_created", ...)`
     - `transition_stage`: validate `to_stage in VALID_TRANSITIONS[journey.current_stage]` (400 on invalid); validate `len(comments) <= 2000` (422 if exceeded); set `current_stage_status=None` for terminal stages; on `OFFER_ACCEPTED` set `overall_status=COMPLETED`, `offer_responded_at=now()`, call `_encrypt_join_record`; on `OFFER_EXTENDED` set `offer_extended_at=now()`; insert `InterviewJourneyStageHistory`; `await db.flush()`; call `publish_event("journey_stage_changed", ...)`
@@ -88,7 +88,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - Use `@given(n=st.integers(min_value=2, max_value=20))` with `max_examples=100`
     - Create N journeys; all `journey_public_id` values are distinct; each is a URL-safe string of at least 22 characters
 
-  - [~] 4.6 Implement journey router in `app/modules/journeys/router.py`
+  - [x] 4.6 Implement journey router in `app/modules/journeys/router.py`
     - `POST /api/v1/journeys` — `require_role("Recruiter", "Administrator")`; returns 201
     - `GET /api/v1/journeys`, `GET /api/v1/journeys/{journey_id}` — `require_role("Recruiter", "Administrator", "HiringManager")`
     - `POST /api/v1/journeys/{journey_id}/transition` — `require_role("Recruiter", "Administrator")`; returns 200
@@ -97,7 +97,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - _Requirements: 1.1, 1.2, 1.4, 1.7, 1.8_
 
 
-- [ ] 5. Implement InterviewSlotService and slot router
+- [x] 5. Implement InterviewSlotService and slot router
   - [x] 5.1 Implement `InterviewSlotService` in `app/modules/slots/service.py`
     - `create_slot`: validate `scheduled_start < scheduled_end` and duration 15–480 minutes (422 on failure); if `interviewer_user_id` provided call `_validate_interviewer_assignment` and set `invitation_status=PENDING`; insert `InterviewSlot`; `await db.flush()`; if interviewer assigned call `publish_event("interview_slot_created", ...)`
     - `_validate_interviewer_assignment`: fetch `InterviewerPreference` for `(interviewer_user_id, org_id)`; apply defaults (MaxPerDay=5, MaxPerWeek=20, all types) if no record; check `slot_type in allowed_types` (409 if not); count non-cancelled slots on same day (409 if >= max_per_day); count non-cancelled slots in same ISO week (409 if >= max_per_week)
@@ -130,7 +130,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - Use `@given(minutes_offset=st.integers(min_value=-120, max_value=120))` with `max_examples=100`
     - `scheduled_end` in the future → HTTPException 409; `scheduled_end` in the past → update succeeds
 
-  - [~] 5.6 Implement slot router in `app/modules/slots/router.py`
+  - [x] 5.6 Implement slot router in `app/modules/slots/router.py`
     - `POST /api/v1/slots` — `require_role("Recruiter", "Administrator")`; returns 201
     - `GET /api/v1/slots`, `GET /api/v1/slots/{slot_id}` — `require_role("Recruiter", "Administrator", "HiringManager")`
     - `PATCH /api/v1/slots/{slot_id}` — `require_role("Recruiter", "Administrator")`
@@ -140,10 +140,10 @@ All code follows the conventions established in the Platform Foundation and Iden
     - _Requirements: 2.1, 2.2, 2.5, 2.6, 2.7, 2.9_
 
 
-- [~] 6. Checkpoint — journey and slot pipeline working
+- [x] 6. Checkpoint — journey and slot pipeline working
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Implement InterviewFeedbackService and feedback router
+- [x] 7. Implement InterviewFeedbackService and feedback router
   - [x] 7.1 Implement `InterviewFeedbackService` in `app/modules/feedback/service.py`
     - `create_feedback`: call `_get_slot_and_authorize_write` (403 if not assigned interviewer); call `_validate_feedback_fields` (422 on invalid ratings or narrative > 5000 chars); insert `InterviewFeedback(type=MANUAL, status=DRAFT)`; set `slot.feedback_id`; `await db.flush()`
     - `submit_feedback`: verify `slot.interviewer_user_id == requesting_user_id` (403 if not); verify `feedback.status != SUBMITTED` (409 if already submitted); set `status=SUBMITTED`; `await db.flush()`
@@ -164,7 +164,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - Use `@given(competency_ratings=st.dictionaries(st.text(min_size=1, max_size=50), st.integers(min_value=1, max_value=5), min_size=1, max_size=5))` with `max_examples=100`
     - After `submit_feedback`: any subsequent edit or submit attempt → HTTPException 409; feedback record unchanged
 
-  - [~] 7.4 Implement feedback router in `app/modules/feedback/router.py`
+  - [x] 7.4 Implement feedback router in `app/modules/feedback/router.py`
     - `POST /api/v1/feedback` — `require_role("Interviewer", "Recruiter", "Administrator")`; returns 201
     - `GET /api/v1/feedback/{feedback_id}` — authorized roles (assigned interviewer, hiring manager, administrator)
     - `PATCH /api/v1/feedback/{feedback_id}` — assigned interviewer only; returns 200
@@ -173,7 +173,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - _Requirements: 3.1, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9_
 
 
-- [ ] 8. Implement QuestionnaireService and questionnaire router
+- [x] 8. Implement QuestionnaireService and questionnaire router
   - [x] 8.1 Implement `QuestionnaireService` in `app/modules/questionnaires/service.py`
     - `create_questionnaire`: call `_validate_questions_yaml` (422 on failure); insert `Questionnaire`; `await db.flush()`
     - `_validate_questions_yaml`: `yaml.safe_load` (422 on parse error); validate list structure; for each question validate `id` (string), `text` (string, max 500), `type` (enum), `required` (bool); validate `options` for choice types; validate `minRating`/`maxRating` for rating type; collect all errors and raise 422 with field list
@@ -200,7 +200,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - Use `@given(answers=st.dictionaries(st.text(min_size=1, max_size=20), st.text(max_size=100), min_size=1, max_size=5))` with `max_examples=100`
     - After `save_answers(is_final_submit=True)`: any subsequent `save_answers` call → HTTPException 403; response record and answers unchanged
 
-  - [~] 8.5 Implement questionnaire router in `app/modules/questionnaires/router.py`
+  - [x] 8.5 Implement questionnaire router in `app/modules/questionnaires/router.py`
     - `POST /api/v1/questionnaires` — `require_role("Recruiter", "Administrator")`; returns 201
     - `GET /api/v1/questionnaires`, `GET /api/v1/questionnaires/{questionnaire_id}` — `require_role("Recruiter", "Administrator", "HiringManager")`
     - `PATCH /api/v1/questionnaires/{questionnaire_id}` — `require_role("Recruiter", "Administrator")`
@@ -210,7 +210,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - _Requirements: 4.1, 4.3, 4.4, 4.5, 4.8, 4.9, 4.10_
 
 
-- [ ] 9. Implement CandidatePortalService and portal router
+- [x] 9. Implement CandidatePortalService and portal router
   - [x] 9.1 Implement `CandidatePortalService` in `app/modules/portal/service.py`
     - `get_or_create_token`: query for existing active non-expired token for `(candidate_id, org_id)`; if found return it; else generate `raw_token = secrets.token_urlsafe(32)` (≥43 URL-safe chars), compute `token_hash = SHA-256(raw_token)`, set `expires_at = now() + timedelta(days=settings.PORTAL_TOKEN_TTL_DAYS)`; insert `CandidatePortalToken(is_active=True)`; `await db.flush()`; return token (raw_token returned once, not stored in plaintext)
     - `validate_token`: compute `token_hash = SHA-256(raw_token)`; query `CandidatePortalToken WHERE token_hash=? AND is_active=True AND expires_at > now() AND deleted_at IS NULL`; if not found raise HTTPException 401 with generic message (no disclosure of reason)
@@ -230,7 +230,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - Use `@given(submitted_email=st.emails(), actual_email=st.emails())` with `assume(submitted_email.lower() != actual_email.lower())` and `max_examples=100`
     - Email mismatch → HTTPException 401 with identical message as invalid token; no disclosure of whether token or email was wrong
 
-  - [~] 9.4 Implement portal router in `app/modules/portal/router.py`
+  - [x] 9.4 Implement portal router in `app/modules/portal/router.py`
     - `POST /api/v1/portal/auth/verify` — unauthenticated; accepts `{token, email}`; returns JWT on success, 401 on failure
     - `GET /api/v1/portal/questionnaires` — token-only auth or JWT; returns candidate's questionnaire list and statuses
     - `GET /api/v1/portal/questionnaires/{response_id}` — token-only auth or JWT; returns questions and existing answers
@@ -242,10 +242,10 @@ All code follows the conventions established in the Platform Foundation and Iden
     - _Requirements: 5.2, 5.4, 5.6, 5.7, 5.8, 5.9_
 
 
-- [~] 10. Checkpoint — questionnaire, portal, and feedback pipeline working
+- [x] 10. Checkpoint — questionnaire, portal, and feedback pipeline working
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. Implement EmailConfigService and email config router
+- [x] 11. Implement EmailConfigService and email config router
   - [x] 11.1 Implement `EmailConfigService` in `app/modules/email_config/service.py`
     - `create_or_update_config`: validate provider-specific required fields — `smtp` requires `smtp_host`, `smtp_port`, `smtp_username`, `smtp_password`; `sendgrid`/`ses` require `third_party_api_key` (422 with field list on failure); encrypt `smtp_password` and `third_party_api_key` via `encrypt_field` before storing; upsert `OrganizationEmailConfig`; `await db.flush()`
     - `get_config`: org-scoped fetch; return config with encrypted fields masked in response schema
@@ -258,7 +258,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - Use `@given(provider=st.sampled_from(list(ProviderType)), email_enabled=st.booleans(), missing_field=st.sampled_from(["smtp_host", "smtp_port", "smtp_username", "smtp_password", "third_party_api_key"]))` with `max_examples=100`
     - Missing required field for selected provider → HTTPException 422 regardless of `email_notifications_enabled` value; valid config → stored successfully
 
-  - [~] 11.3 Implement email config router in `app/modules/email_config/router.py`
+  - [x] 11.3 Implement email config router in `app/modules/email_config/router.py`
     - `GET /api/v1/email-config` — `require_role("Administrator", "SuperAdministrator")`; org-scoped
     - `POST /api/v1/email-config` — `require_role("Administrator", "SuperAdministrator")`; returns 201
     - `PATCH /api/v1/email-config` — `require_role("Administrator", "SuperAdministrator")`
@@ -267,7 +267,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - _Requirements: 6.1, 6.2, 6.6, 6.7, 6.8_
 
 
-- [ ] 12. Implement CandidateAvailabilityService and availability router
+- [x] 12. Implement CandidateAvailabilityService and availability router
   - [x] 12.1 Implement `CandidateAvailabilityService` in `app/modules/availability/service.py`
     - `create_availability`: call `_validate_slot(start_time, end_time, now)` — validate `start_time < end_time` (422), duration 30–480 minutes (422), `start_time >= now + 1 hour` (422); call `_check_active_slot_limit` — count active slots for `(candidate_id, org_id)`, raise 409 if >= 50; insert `CandidateAvailabilitySlot(status=ACTIVE)`; `await db.flush()`
     - `cancel_availability`: set `availability_slot.status=CANCELLED`; query `InterviewSlot WHERE status=SCHEDULED AND scheduled_start >= slot.start_time AND scheduled_end <= slot.end_time AND deleted_at IS NULL`; for each overlapping slot set `status=CANCELLED` and log INFO `interview_slot_cascade_cancelled`; `await db.flush()`
@@ -292,14 +292,14 @@ All code follows the conventions established in the Platform Foundation and Iden
     - Use `@given(n_overlapping=st.integers(min_value=0, max_value=5), n_non_overlapping=st.integers(min_value=0, max_value=3))` with `max_examples=100`
     - Cancel availability slot → all N overlapping `Scheduled` InterviewSlots set to `Cancelled` in same transaction; non-overlapping slots unaffected
 
-  - [~] 12.5 Implement availability router in `app/modules/availability/router.py`
+  - [x] 12.5 Implement availability router in `app/modules/availability/router.py`
     - `GET /api/v1/availability` — candidate (portal auth) or `require_role("Recruiter", "Administrator")`
     - `POST /api/v1/availability` — candidate (portal auth); returns 201
     - `PATCH /api/v1/availability/{slot_id}` — candidate (portal auth); cancel slot
     - _Requirements: 7.1, 7.2, 7.3, 7.5, 7.6_
 
 
-- [ ] 13. Implement NotificationService, EmailDeliveryService, and notification router
+- [x] 13. Implement NotificationService, EmailDeliveryService, and notification router
   - [x] 13.1 Implement `EmailDeliveryService` in `app/modules/notifications/email_delivery.py`
     - `send(to, subject, body)`: if `org_config` provided dispatch to `_send_smtp`, `_send_sendgrid`, or `_send_ses` based on `provider_type`; else fall back to env-var SMTP defaults (`settings.SMTP_HOST`, etc.)
     - `_send_smtp`: build `MIMEMultipart("alternative")`; `smtplib.SMTP(host, port)`; `starttls` if `use_tls`; `login`; `sendmail`
@@ -333,7 +333,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - Use `@given(hours_until_start=st.floats(min_value=-2.0, max_value=30.0))` with `max_examples=100`
     - `hours_until_start > 24` → no reminder sent; `0 <= hours_until_start <= 24` with `status=SCHEDULED` and valid `invitation_status` → reminder sent; slot not Scheduled or invitation not Pending/Accepted → no reminder
 
-  - [~] 13.6 Implement notification router in `app/modules/notifications/router.py`
+  - [x] 13.6 Implement notification router in `app/modules/notifications/router.py`
     - `POST /internal/agents/notification` — internal endpoint authenticated via `X-Agent-API-Key`; accepts notification delivery request
     - `GET /api/v1/notification-templates` — `require_role("Administrator", "SuperAdministrator")`; org-scoped
     - `POST /api/v1/notification-templates` — `require_role("Administrator", "SuperAdministrator")`; returns 201

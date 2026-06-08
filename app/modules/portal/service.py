@@ -8,7 +8,7 @@ Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import jwt
@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.crypto import decrypt_field
-from app.decorators import transactional
 from app.modules.candidates.models import Candidate
 from app.modules.portal.models import CandidatePortalToken
 from app.observability.logging import get_logger
@@ -32,9 +31,7 @@ class CandidatePortalService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_or_create_token(
-        self, candidate_id: UUID, org_id: UUID
-    ) -> str:
+    async def get_or_create_token(self, candidate_id: UUID, org_id: UUID) -> str:
         """
         Get existing active non-expired token or create a new one.
 
@@ -54,7 +51,7 @@ class CandidatePortalService:
         Raises:
             HTTPException: On database errors (500)
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Query for existing active non-expired token
         stmt = select(CandidatePortalToken).where(
@@ -127,7 +124,7 @@ class CandidatePortalService:
             HTTPException: 401 with generic message if token invalid, expired, or not found
         """
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         stmt = select(CandidatePortalToken).where(
             and_(
@@ -159,9 +156,7 @@ class CandidatePortalService:
 
         return token_record.candidate_id, token_record.organization_id
 
-    async def verify_email_and_issue_jwt(
-        self, raw_token: str, email: str
-    ) -> str:
+    async def verify_email_and_issue_jwt(self, raw_token: str, email: str) -> str:
         """
         Verify email and issue a JWT session token.
 
@@ -209,6 +204,12 @@ class CandidatePortalService:
             )
 
         # Decrypt email and compare
+        if not candidate.email:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired access token",
+            )
+
         decrypted_email = decrypt_field(candidate.email).lower()
         provided_email = email.lower().strip()
 
@@ -224,7 +225,7 @@ class CandidatePortalService:
             )
 
         # Sign JWT with 60-minute expiry
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         exp = now + timedelta(minutes=60)
         payload = {
             "sub": provided_email,
@@ -233,9 +234,7 @@ class CandidatePortalService:
             "exp": exp,
             "iat": now,
         }
-        access_token = jwt.encode(
-            payload, settings.JWT_SIGNING_KEY, algorithm="HS256"
-        )
+        access_token = jwt.encode(payload, settings.JWT_SIGNING_KEY, algorithm="HS256")
 
         logger.info(
             "portal_jwt_issued",

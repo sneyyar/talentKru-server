@@ -52,20 +52,20 @@ class FeedbackResponse(BaseModel):
     organization_id: UUID = Field(
         ..., description="The organization ID this feedback belongs to"
     )
-    feedback_type: str = Field(
-        ..., description="Type of feedback (Manual or AIGenerated)"
+    type: str = Field(
+        ..., description="Type of feedback (Manual or AIGenerated)", alias="type"
     )
     status: str = Field(
         ..., description="Current status of the feedback (Draft or Submitted)"
     )
-    competency_ratings: dict[str, int] = Field(
-        ..., description="Competency ratings as a dictionary mapping competency names to integer ratings"
+    competency_ratings: dict[str, int] | None = Field(
+        None, description="Competency ratings as a dictionary mapping competency names to integer ratings"
     )
-    narrative: str = Field(
-        ..., description="Narrative summary of the feedback"
+    narrative: str | None = Field(
+        None, description="Narrative summary of the feedback"
     )
-    hiring_recommendation: str = Field(
-        ..., description="Hiring recommendation (StrongYes, Yes, Neutral, No, or StrongNo)"
+    hiring_recommendation: str | None = Field(
+        None, description="Hiring recommendation (StrongYes, Yes, Neutral, No, or StrongNo)"
     )
     created_at: datetime = Field(
         ..., description="Timestamp when the feedback was created"
@@ -76,6 +76,10 @@ class FeedbackResponse(BaseModel):
     updated_at: datetime | None = Field(
         None, description="Timestamp when the feedback was last updated"
     )
+
+    class Config:
+        """Pydantic config for ORM mode."""
+        from_attributes = True
 
 
 class TranscriptRequest(BaseModel):

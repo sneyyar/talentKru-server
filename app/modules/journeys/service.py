@@ -11,10 +11,11 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from fastapi import BackgroundTasks, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crypto import encrypt_field
+from app.decorators import read_only, transactional
 from app.domain_events.publisher import publish_event
 from app.modules.journeys.models import (
     CandidateInterviewJourney,
@@ -93,6 +94,7 @@ class InterviewJourneyService:
         """Initialize with database session."""
         self.db = db
 
+    @transactional()
     async def create_journey(
         self,
         org_id: UUID,
@@ -159,6 +161,7 @@ class InterviewJourneyService:
 
         return journey
 
+    @transactional()
     async def transition_stage(
         self,
         journey: InterviewJourney,
@@ -288,6 +291,7 @@ class InterviewJourneyService:
             candidate_id=str(candidate_id),
         )
 
+    @read_only
     async def get_journey(self, journey_id: UUID, org_id: UUID) -> InterviewJourney | None:
         """
         Fetch a journey by ID with org-scoped filtering.
@@ -303,6 +307,7 @@ class InterviewJourneyService:
         )
         return result.scalar_one_or_none()
 
+    @read_only
     async def list_journeys(
         self,
         org_id: UUID,
@@ -317,32 +322,29 @@ class InterviewJourneyService:
 
         Requirements: 1.1
         """
-        stmt = select(InterviewJourney).where(
+        where_clause = (
             InterviewJourney.organization_id == org_id,
             InterviewJourney.deleted_at.is_(None),
         )
 
         if candidate_id:
-            stmt = stmt.where(InterviewJourney.candidate_id == candidate_id)
+            where_clause = (*where_clause, InterviewJourney.candidate_id == candidate_id)
 
-        # Get total count
-        count_result = await self.db.execute(
-            select(InterviewJourney).where(
-                InterviewJourney.organization_id == org_id,
-                InterviewJourney.deleted_at.is_(None),
-            ).with_only_columns()
-        )
-        total = count_result.rowcount if hasattr(count_result, 'rowcount') else 0
+        # Get total count using func.count()
+        count_stmt = select(func.count()).select_from(InterviewJourney).where(*where_clause)
+        count_result = await self.db.execute(count_stmt)
+        total = count_result.scalar() or 0
 
         # Get paginated results
-        stmt = stmt.order_by(InterviewJourney.created_at.desc()).limit(limit).offset(
-            offset
-        )
+        stmt = select(InterviewJourney).where(*where_clause).order_by(
+            InterviewJourney.created_at.desc()
+        ).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         journeys = result.scalars().all()
 
         return journeys, total
 
+    @read_only
     async def get_journey_history(
         self,
         journey_id: UUID,
@@ -357,23 +359,21 @@ class InterviewJourneyService:
 
         Requirements: 1.4
         """
-        stmt = select(InterviewJourneyStageHistory).where(
+        where_clause = (
             InterviewJourneyStageHistory.interview_journey_id == journey_id,
             InterviewJourneyStageHistory.organization_id == org_id,
             InterviewJourneyStageHistory.deleted_at.is_(None),
         )
 
-        # Get total count
-        count_stmt = select(InterviewJourneyStageHistory).where(
-            InterviewJourneyStageHistory.interview_journey_id == journey_id,
-            InterviewJourneyStageHistory.organization_id == org_id,
-            InterviewJourneyStageHistory.deleted_at.is_(None),
-        ).with_only_columns()
+        # Get total count using func.count()
+        count_stmt = select(func.count()).select_from(InterviewJourneyStageHistory).where(*where_clause)
         count_result = await self.db.execute(count_stmt)
-        total = count_result.rowcount if hasattr(count_result, 'rowcount') else 0
+        total = count_result.scalar() or 0
 
         # Get paginated results
-        stmt = stmt.order_by(
+        stmt = select(InterviewJourneyStageHistory).where(
+            *where_clause
+        ).order_by(
             InterviewJourneyStageHistory.changed_at.desc()
         ).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
