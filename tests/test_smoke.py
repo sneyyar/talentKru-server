@@ -47,16 +47,18 @@ def test_version_id_col_on_all_mutable_entities():
     """All 14 mutable entities must have version_id_col configured via VersionMixin."""
     from sqlalchemy import inspect as sa_inspect
 
-    from app.modules.organizations.models import Organization, OrganizationEmailConfig
+    from app.modules.organizations.models import Organization
+    from app.modules.email_config.models import OrganizationEmailConfig
     from app.modules.candidates.models import Candidate
     from app.modules.users.models import User
     from app.modules.journeys.models import InterviewJourney
-    from app.modules.interviews.models import InterviewSlot, InterviewFeedback, InterviewerPreference
+    from app.modules.slots.models import InterviewSlot, InterviewerPreference
+    from app.modules.feedback.models import InterviewFeedback
     from app.modules.requisitions.models import JobRequisition
     from app.modules.job_posting.models import JobPosting
     from app.modules.job_profile.models import JobProfile
     from app.modules.questionnaires.models import Questionnaire, CandidateQuestionnaireResponse
-    from app.modules.reporting.models import NotificationTemplate
+    from app.modules.notifications.models import NotificationTemplate
 
     mutable_entities = [
         Organization,

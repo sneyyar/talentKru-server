@@ -170,7 +170,6 @@ class TestJobPostingSalaryFilterIntegration:
             posting = await posting_service.create_posting(
                 org_id=org_id,
                 job_profile_id=profile.job_profile_id,
-                title=f"Engineer {i+1}" if i == 0 else None,
                 description=f"Engineer role {i+1}",
                 work_locations=["San Francisco, CA"],
                 salary_min=min_sal,

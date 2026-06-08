@@ -298,7 +298,7 @@ async def test_verify_email_and_issue_jwt_invalid_token_raises_401(
 # ============================================================================
 
 
-@hyp_settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
+@hyp_settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
 @given(ttl_days=st.integers(min_value=1, max_value=365))
 @pytest.mark.asyncio
 async def test_portal_token_entropy_and_ttl(
@@ -344,14 +344,14 @@ async def test_portal_token_entropy_and_ttl(
     assert exc.value.status_code == 401
 
 
-@hyp_settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
+@hyp_settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
 @given(
     submitted_email=st.emails(),
     actual_email=st.emails(),
 )
 @pytest.mark.asyncio
 async def test_portal_email_verification_non_disclosure(
-    db_session: AsyncSession, org_id: UUID, submitted_email: str, actual_email: str
+    db_session: AsyncSession, org_id: UUID, submitted_email: str, actual_email: str, test_run_id: str
 ):
     """
     Property 15: Portal email verification non-disclosure.
@@ -366,7 +366,10 @@ async def test_portal_email_verification_non_disclosure(
         return
 
     candidate_id = uuid4()
-    encrypted_email = encrypt_field(actual_email)
+    # Make email unique per test run to avoid unique constraint violations
+    unique_actual_email = f"actual-{test_run_id}-{secrets.token_hex(4)}@example.com"
+    unique_submitted_email = f"submitted-{test_run_id}-{secrets.token_hex(4)}@example.com"
+    encrypted_email = encrypt_field(unique_actual_email)
 
     # Create candidate with actual email
     candidate = Candidate(
@@ -375,7 +378,7 @@ async def test_portal_email_verification_non_disclosure(
         name=encrypt_field("Test"),
         name_hash=hashlib.sha256("Test".encode()).hexdigest(),
         email=encrypted_email,
-        email_hash=hashlib.sha256(actual_email.lower().encode()).hexdigest(),
+        email_hash=hashlib.sha256(unique_actual_email.lower().encode()).hexdigest(),
         global_status=GlobalStatus.ACTIVE.value,
     )
     db_session.add(candidate)
@@ -386,7 +389,7 @@ async def test_portal_email_verification_non_disclosure(
 
     # Email mismatch should raise 401
     with pytest.raises(HTTPException) as exc_info:
-        await service.verify_email_and_issue_jwt(raw_token, submitted_email)
+        await service.verify_email_and_issue_jwt(raw_token, unique_submitted_email)
 
     assert exc_info.value.status_code == 401
     # Message should be generic - same as for invalid token
@@ -401,7 +404,7 @@ async def test_portal_email_verification_non_disclosure(
     assert exc_invalid.value.detail == exc_info.value.detail
 
 
-@hyp_settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
+@hyp_settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
 @given(st.just(None))  # Just one example per hypothesis run
 @pytest.mark.asyncio
 async def test_portal_token_returned_once_not_stored(

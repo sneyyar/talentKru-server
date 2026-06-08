@@ -12,8 +12,7 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock, patch
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.notifications.service import NotificationService
 from app.modules.notifications.models import (
@@ -27,272 +26,217 @@ from app.modules.email_config.models import (
     ProviderType,
 )
 from app.modules.slots.models import InterviewSlot, SlotStatus, InvitationStatus
-from app.base_model import Base
 from app.crypto import encrypt_field
 
 
-@pytest.fixture
-async def test_db():
-    """Create an in-memory test database for unit tests."""
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session_factory() as session:
-        yield session
-    
-    await engine.dispose()
-
-
 @pytest.mark.asyncio
-async def test_render_replaces_placeholders():
+async def test_render_replaces_placeholders(db_session: AsyncSession):
     """Test that _render correctly replaces {{variable}} placeholders."""
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import StaticPool
-    
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session_factory() as session:
-        service = NotificationService(session)
+    service = NotificationService(db_session)
 
-        template = "Hello {{name}}, your interview is at {{time}}"
-        payload = {"name": "John", "time": "2025-01-15 14:00"}
+    template = "Hello {{name}}, your interview is at {{time}}"
+    payload = {"name": "John", "time": "2025-01-15 14:00"}
 
-        result = service._render(template, payload)
-        assert result == "Hello John, your interview is at 2025-01-15 14:00"
-    
-    await engine.dispose()
+    result = service._render(template, payload)
+    assert result == "Hello John, your interview is at 2025-01-15 14:00"
 
 
 @pytest.mark.asyncio
-async def test_render_unknown_placeholders():
+async def test_render_unknown_placeholders(db_session: AsyncSession):
     """Test that _render leaves unknown placeholders as-is."""
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import StaticPool
-    
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session_factory() as session:
-        service = NotificationService(session)
+    service = NotificationService(db_session)
 
-        template = "Hello {{name}}, {{unknown}} placeholder"
-        payload = {"name": "John"}
+    template = "Hello {{name}}, event: {{event_id}}"
+    payload = {"name": "Jane"}
 
-        result = service._render(template, payload)
-        assert result == "Hello John, {{unknown}} placeholder"
-    
-    await engine.dispose()
+    result = service._render(template, payload)
+    # Unknown variable {{event_id}} should remain unchanged
+    assert result == "Hello Jane, event: {{event_id}}"
 
 
 @pytest.mark.asyncio
-async def test_deliver_respects_global_switch_disabled():
-    """Test that global email_notifications_enabled=false skips delivery."""
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import StaticPool
-    
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+async def test_deliver_respects_global_switch_disabled(db_session: AsyncSession):
+    """Test that disabled global switch prevents delivery."""
+    # Get or create global setting with disabled value
+    result = await db_session.execute(
+        __import__('sqlalchemy').select(SystemSetting).where(
+            SystemSetting.setting_key == "email_notifications_enabled"
+        )
     )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session_factory() as session:
-        # Set global switch to false
+    setting = result.scalar_one_or_none()
+    if setting:
+        setting.setting_value = "false"
+    else:
         setting = SystemSetting(
             setting_key="email_notifications_enabled",
             setting_value="false",
         )
-        session.add(setting)
-        await session.flush()
+        db_session.add(setting)
+    await db_session.flush()
 
-        # Create service and attempt delivery
-        service = NotificationService(session)
-        result = await service.deliver(
-            event_type="test_event",
-            payload={"test": "value"},
-            org_id=uuid4(),
-            recipient_email="test@example.com",
-        )
+    service = NotificationService(db_session)
 
-        # Should return None (delivery skipped)
-        assert result is None
-    
-    await engine.dispose()
+    result = await service.deliver(
+        event_type="test_event",
+        payload={"test": "value"},
+        org_id=uuid4(),
+        recipient_email="test@example.com",
+    )
+
+    # Should return None (delivery skipped)
+    assert result is None
 
 
 @pytest.mark.asyncio
-async def test_deliver_template_not_found():
+async def test_deliver_template_not_found(db_session: AsyncSession):
     """Test that missing template causes delivery to return None."""
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import StaticPool
-    
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+    # Enable global switch
+    from sqlalchemy import select
+    result = await db_session.execute(
+        select(SystemSetting).where(
+            SystemSetting.setting_key == "email_notifications_enabled"
+        )
     )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session_factory() as session:
-        # Global and org switches are enabled
+    setting = result.scalar_one_or_none()
+    if setting:
+        setting.setting_value = "true"
+    else:
         setting = SystemSetting(
             setting_key="email_notifications_enabled",
             setting_value="true",
         )
-        session.add(setting)
-        await session.flush()
+        db_session.add(setting)
+    await db_session.flush()
 
-        # Try to deliver without template existing
-        service = NotificationService(session)
-        result = await service.deliver(
-            event_type="nonexistent_event",
-            payload={"test": "value"},
-            org_id=uuid4(),
-            recipient_email="test@example.com",
-        )
+    # Try to deliver without template existing
+    service = NotificationService(db_session)
+    result = await service.deliver(
+        event_type="nonexistent_event",
+        payload={"test": "value"},
+        org_id=uuid4(),
+        recipient_email="test@example.com",
+    )
 
-        # Should return None
-        assert result is None
-    
-    await engine.dispose()
+    # Should return None
+    assert result is None
 
 
 @pytest.mark.asyncio
-async def test_deliver_disabled_template():
+async def test_deliver_disabled_template(db_session: AsyncSession):
     """Test that disabled template causes delivery to return None."""
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import StaticPool
-    
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+    from sqlalchemy import select
+    result = await db_session.execute(
+        select(SystemSetting).where(
+            SystemSetting.setting_key == "email_notifications_enabled"
+        )
     )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session_factory() as session:
+    setting = result.scalar_one_or_none()
+    if setting:
+        setting.setting_value = "true"
+    else:
         setting = SystemSetting(
             setting_key="email_notifications_enabled",
             setting_value="true",
         )
-        session.add(setting)
+        db_session.add(setting)
 
-        org_id = uuid4()
-        org_config = OrganizationEmailConfig(
-            organization_email_config_id=uuid4(),
-            organization_id=org_id,
-            email_notifications_enabled=True,
-            provider_type=ProviderType.SMTP.value,
-            from_address="noreply@example.com",
-            from_name="Test System",
-        )
-        session.add(org_config)
+    org_id = uuid4()
+    org_config = OrganizationEmailConfig(
+        organization_email_config_id=uuid4(),
+        organization_id=org_id,
+        email_notifications_enabled=True,
+        provider_type=ProviderType.SMTP.value,
+        from_address="noreply@example.com",
+        from_name="Test System",
+    )
+    db_session.add(org_config)
 
-        # Create disabled template
-        template = NotificationTemplate(
-            notification_template_id=uuid4(),
-            organization_id=org_id,
-            event_type="test_event",
-            subject="Test Subject",
-            body_template="Test Body",
-            is_enabled=False,
-        )
-        session.add(template)
-        await session.flush()
+    # Create disabled template
+    template = NotificationTemplate(
+        notification_template_id=uuid4(),
+        organization_id=org_id,
+        event_type="test_event",
+        subject="Test Subject",
+        body_template="Test Body",
+        is_enabled=False,
+    )
+    db_session.add(template)
+    await db_session.flush()
 
-        # Try to deliver with disabled template
-        service = NotificationService(session)
-        result = await service.deliver(
-            event_type="test_event",
-            payload={},
-            org_id=org_id,
-            recipient_email="test@example.com",
-        )
+    # Try to deliver with disabled template
+    service = NotificationService(db_session)
+    result = await service.deliver(
+        event_type="test_event",
+        payload={},
+        org_id=org_id,
+        recipient_email="test@example.com",
+    )
 
-        # Should return None
-        assert result is None
-    
-    await engine.dispose()
+    # Should return None
+    assert result is None
 
 
 @pytest.mark.asyncio
-async def test_attempt_delivery_succeeds_first_try():
+async def test_attempt_delivery_succeeds_first_try(db_session: AsyncSession):
     """Test that delivery succeeds on first attempt."""
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import StaticPool
-    
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+    org_id = uuid4()
+    record = NotificationRecord(
+        notification_record_id=uuid4(),
+        organization_id=org_id,
+        event_type="test_event",
+        recipient_email="test@example.com",
+        status=NotificationStatus.PENDING.value,
+        attempt_count=0,
     )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
+    db_session.add(record)
+    await db_session.flush()
+
+    service = NotificationService(db_session)
+    service.email_service.send = AsyncMock()
+
+    await service._attempt_delivery(
+        record,
+        org_id,
+        "test@example.com",
+        "Subject",
+        "Body",
     )
-    
-    async with async_session_factory() as session:
-        org_id = uuid4()
-        record = NotificationRecord(
-            notification_record_id=uuid4(),
-            organization_id=org_id,
-            event_type="test_event",
-            recipient_email="test@example.com",
-            status=NotificationStatus.PENDING.value,
-            attempt_count=0,
-        )
-        session.add(record)
-        await session.flush()
 
-        service = NotificationService(session)
-        service.email_service.send = AsyncMock()
+    # Should be DELIVERED
+    assert record.status == NotificationStatus.DELIVERED.value
+    assert record.delivered_at is not None
+    service.email_service.send.assert_called_once()
 
+
+@pytest.mark.asyncio
+async def test_attempt_delivery_retries_with_backoff(db_session: AsyncSession):
+    """Test that delivery retries with exponential backoff."""
+    org_id = uuid4()
+    record = NotificationRecord(
+        notification_record_id=uuid4(),
+        organization_id=org_id,
+        event_type="test_event",
+        recipient_email="test@example.com",
+        status=NotificationStatus.PENDING.value,
+        attempt_count=0,
+    )
+    db_session.add(record)
+    await db_session.flush()
+
+    service = NotificationService(db_session)
+
+    # Mock send to fail twice, then succeed on third attempt
+    send_call_count = 0
+
+    async def mock_send(*args, **kwargs):
+        nonlocal send_call_count
+        send_call_count += 1
+        if send_call_count < 3:
+            raise Exception("Temporary failure")
+
+    service.email_service.send = mock_send
+
+    with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         await service._attempt_delivery(
             record,
             org_id,
@@ -301,121 +245,40 @@ async def test_attempt_delivery_succeeds_first_try():
             "Body",
         )
 
-        # Should be DELIVERED
-        assert record.status == NotificationStatus.DELIVERED.value
-        assert record.delivered_at is not None
-        service.email_service.send.assert_called_once()
-    
-    await engine.dispose()
+    # Should have retried twice with backoff
+    assert send_call_count == 3
+    assert record.status == NotificationStatus.DELIVERED.value
+    # First retry: 60 * 2^0 = 60 seconds, second retry: 60 * 2^1 = 120 seconds
+    assert mock_sleep.call_count == 2
 
 
 @pytest.mark.asyncio
-async def test_attempt_delivery_retries_with_backoff():
-    """Test that delivery retries with exponential backoff."""
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import StaticPool
-    
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session_factory() as session:
-        org_id = uuid4()
-        record = NotificationRecord(
-            notification_record_id=uuid4(),
-            organization_id=org_id,
-            event_type="test_event",
-            recipient_email="test@example.com",
-            status=NotificationStatus.PENDING.value,
-            attempt_count=0,
-        )
-        session.add(record)
-        await session.flush()
-
-        service = NotificationService(session)
-
-        # Mock send to fail twice, then succeed on third attempt
-        send_call_count = 0
-
-        async def mock_send(*args, **kwargs):
-            nonlocal send_call_count
-            send_call_count += 1
-            if send_call_count < 3:
-                raise Exception("Temporary failure")
-
-        service.email_service.send = mock_send
-
-        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            await service._attempt_delivery(
-                record,
-                org_id,
-                "test@example.com",
-                "Subject",
-                "Body",
-            )
-
-        # Should have retried twice with backoff
-        assert send_call_count == 3
-        assert record.status == NotificationStatus.DELIVERED.value
-        # First retry: 60 * 2^0 = 60 seconds, second retry: 60 * 2^1 = 120 seconds
-        assert mock_sleep.call_count == 2
-    
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_attempt_delivery_permanent_failure_after_5_attempts():
+async def test_attempt_delivery_permanent_failure_after_5_attempts(db_session: AsyncSession):
     """Test that delivery is permanently failed after 5 attempts."""
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import StaticPool
-    
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
+    org_id = uuid4()
+    record = NotificationRecord(
+        notification_record_id=uuid4(),
+        organization_id=org_id,
+        event_type="test_event",
+        recipient_email="test@example.com",
+        status=NotificationStatus.PENDING.value,
+        attempt_count=0,
     )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session_factory() as session:
-        org_id = uuid4()
-        record = NotificationRecord(
-            notification_record_id=uuid4(),
-            organization_id=org_id,
-            event_type="test_event",
-            recipient_email="test@example.com",
-            status=NotificationStatus.PENDING.value,
-            attempt_count=0,
+    db_session.add(record)
+    await db_session.flush()
+
+    service = NotificationService(db_session)
+    service.email_service.send = AsyncMock(side_effect=Exception("Persistent failure"))
+
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        await service._attempt_delivery(
+            record,
+            org_id,
+            "test@example.com",
+            "Subject",
+            "Body",
         )
-        session.add(record)
-        await session.flush()
 
-        service = NotificationService(session)
-        service.email_service.send = AsyncMock(side_effect=Exception("Persistent failure"))
-
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            await service._attempt_delivery(
-                record,
-                org_id,
-                "test@example.com",
-                "Subject",
-                "Body",
-            )
-
-        # Should be PERMANENTLY_FAILED
-        assert record.status == NotificationStatus.PERMANENTLY_FAILED.value
-        assert record.attempt_count == 5
-    
-    await engine.dispose()
+    # Should be PERMANENTLY_FAILED
+    assert record.status == NotificationStatus.PERMANENTLY_FAILED.value
+    assert record.attempt_count == 5
