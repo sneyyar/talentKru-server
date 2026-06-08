@@ -64,21 +64,3 @@ class Organization(Base, AuditMixin, VersionMixin):
 
     # Rate limiting — requests per minute for authenticated endpoints (Req 8.3)
     rate_limit_per_minute = Column(Integer, nullable=False, default=1000)
-
-
-class OrganizationEmailConfig(Base, AuditMixin, VersionMixin):
-    """
-    OrganizationEmailConfig entity stub.
-
-    Stores per-organization email configuration (e.g. SMTP settings, sender
-    address). Mutable and versioned for optimistic locking.
-
-    Requirements: 7.1, 7.5
-    """
-
-    __tablename__ = "organization_email_configs"
-
-    config_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-
-    # Org-scoping — required by the org-scoped query helper (Req 2.4)
-    organization_id = Column(UUID(as_uuid=True), nullable=True)

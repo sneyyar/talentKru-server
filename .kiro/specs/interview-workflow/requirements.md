@@ -2,12 +2,14 @@
 
 ## Introduction
 
-This is the Interview Workflow module of TalentKru.ai Server, covering the interview journey lifecycle, slot scheduling, interviewer feedback, questionnaire management, candidate self-service portal, email notification configuration, candidate availability, and the notification agent. This module orchestrates the end-to-end interview process from scheduling through feedback collection and candidate communication.
+This is the Interview Workflow module of TalentKru.ai Server, covering the interview journey lifecycle, slot scheduling, interviewer feedback, questionnaire management, candidate self-service portal, email notification configuration, candidate availability, candidate feedback surveys, and the notification agent. This module orchestrates the end-to-end interview process from scheduling through feedback collection, candidate communication, and post-interview experience assessment.
 
 Key architectural decisions relevant to this module:
-- FastAPI background tasks for async processing (AI feedback generation, notification delivery, questionnaire orchestration).
+- FastAPI background tasks for async processing (AI feedback generation, notification delivery, questionnaire orchestration, survey reminders).
 - Soft delete only for data retention; interview artifacts attached to InterviewJourney with an encrypted join table for hired candidates.
 - Manual fallback paths for all AI features (behavioral feedback, questionnaire assignment, notification delivery).
+- Token-based survey access without requiring candidate login, enabling seamless survey completion within the portal.
+- Plain-text survey responses stored for analytics queries and trend analysis.
 
 ## Glossary
 
@@ -18,6 +20,8 @@ Key architectural decisions relevant to this module:
 - **InterviewSlot**: A scheduled interview event within a journey, assigned to an interviewer.
 - **Questionnaire**: A set of questions associated with requisitions that candidates must complete.
 - **CandidatePortalToken**: A URL-safe token granting candidates access to the self-service portal.
+- **CandidateFeedbackSurvey**: A post-interview survey sent to candidates after completing the LoopInterview stage to collect feedback on their interview experience.
+- **CandidateFeedbackSurveyToken**: A unique, URL-safe token granting one-time access to a candidate feedback survey embedded in the portal.
 - **NotificationAgent**: An AI agent that orchestrates email and notification delivery.
 - **BehavioralFeedbackAgent**: An AI agent that generates structured behavioral interview feedback from transcripts.
 - **AuditFields**: Standard fields on all entities: CreatedAt, UpdatedAt, DeletedAt, CreatedBy, UpdatedBy, DeletedBy.
@@ -150,3 +154,28 @@ Key architectural decisions relevant to this module:
 8. THE Server SHALL support organization-level notification templates and per-event-type enable/disable configuration via the NotificationTemplate entity.
 9. IF the NotificationAgent fails to deliver a notification, THEN THE Server SHALL log the failure and retry with exponential backoff up to a maximum of 5 attempts.
 10. IF the NotificationAgent exhausts all retry attempts for a notification, THEN THE Server SHALL log the final failure and mark the notification as permanently failed.
+
+### Requirement 9: Candidate Feedback Survey
+
+**User Story:** As a recruiter, I want to collect structured feedback on candidate interview experience so that we can gather insights on our recruitment process quality and identify areas for improvement.
+
+#### Acceptance Criteria
+
+1. THE Server SHALL store CandidateFeedbackSurvey entities with fields: CandidateFeedbackSurveyID (UUID), OrganizationID (FK), InterviewJourneyID (FK), CandidateID (FK), SurveyTokenID (FK to unique survey token), Status (Draft, Sent, Completed, Expired), CreatedAt (timestamp when survey initiated), ExpiresAt (timestamp, 30 days from creation), FirstReminderSentAt (nullable timestamp, 7 days after creation), CompletedAt (nullable timestamp when candidate submits), and AuditFields.
+2. THE Server SHALL store CandidateFeedbackSurveyToken entities with fields: CandidateFeedbackSurveyTokenID (UUID), CandidateFeedbackSurveyID (FK), Token (URL-safe unique string, minimum 32 bytes of cryptographic randomness), TokenHash (SHA-256 hash of token), CreatedAt (timestamp), ExpiresAt (timestamp, same as survey), IsActive (boolean, default true), and AuditFields.
+3. THE Server SHALL store CandidateFeedbackSurveyQuestion entities with fields: CandidateFeedbackSurveyQuestionID (UUID), OrganizationID (FK), DisplayOrder (integer, 1-10), QuestionText (string, max 500 characters), Category (enum: application, recruiter_experience, hiring_manager_experience, loop_interview_experience, offer_experience), IsRequired (boolean, default true), and AuditFields, allowing organizations to configure survey questions and categories.
+4. THE Server SHALL store CandidateFeedbackSurveyResponse entities with fields: CandidateFeedbackSurveyResponseID (UUID), CandidateFeedbackSurveyID (FK), OrganizationID (FK), CreatedAt (timestamp), UpdatedAt (timestamp), and AuditFields, as the parent record for all responses to a single survey submission.
+5. THE Server SHALL store CandidateFeedbackSurveyAnswer entities with fields: CandidateFeedbackSurveyAnswerID (UUID), CandidateFeedbackSurveyResponseID (FK), CandidateFeedbackSurveyQuestionID (FK), Rating (integer, range 1-10 or 0 for N/A), and AuditFields, allowing candidates to rate each survey question on a 1-10 scale with 0 representing N/A (not applicable).
+6. THE Server SHALL store AdditionalComments (text, max 2000 characters) as a field on CandidateFeedbackSurveyResponse to capture open-ended candidate feedback about their interview experience.
+7. WHEN an InterviewJourney stage transitions OUT OF LoopInterview (to any subsequent stage), THE Server SHALL automatically create a new CandidateFeedbackSurvey record with Status Draft, generate a unique CandidateFeedbackSurveyToken with at least 32 bytes of cryptographic randomness, set ExpiresAt to 30 days from creation, and publish a domain event for the NotificationAgent.
+8. THE Server SHALL enforce that each candidate receives only one survey per InterviewJourney; IF a survey already exists for the journey, no new survey SHALL be created on stage transition.
+9. WHEN the NotificationAgent receives the survey creation event, THE Server SHALL send the candidate an email with a unique survey link (token-based URL) that opens directly to the survey form within the candidate portal, without requiring additional login or authentication beyond the token.
+10. IF a candidate receives a survey and does not complete it within 7 days, THE NotificationAgent SHALL send an automated reminder email containing the same unique survey link.
+11. IF a candidate does not complete the survey within 30 days from creation, THE Server SHALL silently expire the survey by setting Status to Expired; no further reminders SHALL be sent, and THE Server SHALL reject any submissions with a 410 Gone response.
+12. WHEN a candidate accesses the survey portal with a valid survey token, THE Server SHALL validate that the token exists, is active, the survey has not expired, and the survey status is not Completed.
+13. IF a candidate attempts to access an expired survey or a survey with Status Completed, THE Server SHALL reject the request with a 410 Gone response and display a message indicating the survey is no longer available.
+14. WHEN a candidate submits survey responses, THE Server SHALL create a CandidateFeedbackSurveyResponse record, create CandidateFeedbackSurveyAnswer records for each question (rating 1-10 or 0 for N/A), store any additional comments, set the parent CandidateFeedbackSurvey Status to Completed, and persist CompletedAt timestamp.
+15. IF a candidate attempts to submit the survey a second time, THE Server SHALL reject the submission with a 409 Conflict response and display a message: "This survey has already been completed and cannot be resubmitted."
+16. THE Server SHALL store survey responses in plain text (not encrypted) to enable analytics queries; the data model SHALL support easy aggregation by Category, Organization, and time period for trending analysis.
+17. THE Server SHALL store a separate SurveyFeedbackTemplate entity with fields: SurveyFeedbackTemplateID (UUID), OrganizationID (FK), TemplateType (enum: initial_survey_invitation, survey_reminder), Subject (string, max 200 characters), BodyTemplate (text with placeholder variables in {{variable}} format), IsEnabled (boolean), and AuditFields, allowing organization-level customization of survey notification content separate from general notification templates.
+18. THE Server SHALL support organization-level survey templates and per-template-type enable/disable configuration, allowing organizations to customize survey invitation and reminder emails independently.

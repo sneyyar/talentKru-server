@@ -69,6 +69,12 @@ app/modules/
 │   ├── service.py         # CandidateAvailabilityService: validation, cascade cancellation
 │   ├── schemas.py         # AvailabilityCreate, AvailabilityResponse
 │   └── models.py          # CandidateAvailabilitySlot
+├── surveys/
+│   ├── router.py          # GET /surveys/{token}, POST /surveys/{token}/submit
+│   ├── service.py         # CandidateFeedbackSurveyService: token generation, expiry, reminders
+│   ├── schemas.py         # SurveyResponse, SurveySubmitRequest, SurveyTemplateCreate
+│   ├── models.py          # CandidateFeedbackSurvey, CandidateFeedbackSurveyToken, CandidateFeedbackSurveyQuestion, CandidateFeedbackSurveyResponse, CandidateFeedbackSurveyAnswer, SurveyFeedbackTemplate
+│   └── scheduler.py       # Background scheduler for 7-day reminders and 30-day expiry
 └── notifications/
     ├── router.py          # (internal) POST /internal/agents/notification
     ├── service.py         # NotificationService: two-level switch, template resolution, retry
@@ -233,6 +239,95 @@ sequenceDiagram
         PortalService-->>Candidate: 200 {access_token}
     else email mismatch
         PortalService-->>Candidate: 401 Unauthorized
+    end
+```
+
+### Candidate Feedback Survey Lifecycle and Reminder Flow
+
+```mermaid
+sequenceDiagram
+    participant JourneyService
+    participant DB
+    participant EventPublisher
+    participant SurveyService
+    participant BackgroundScheduler
+    participant NotificationService
+    participant Candidate
+
+    JourneyService->>JourneyService: transition_stage OUT OF LoopInterview
+    JourneyService->>DB: UPDATE InterviewJourney SET current_stage=next_stage
+    JourneyService->>EventPublisher: publish_event("survey_created", {journey_id, candidate_id, org_id})
+    EventPublisher->>DB: INSERT DomainEvent (Status=Pending)
+    EventPublisher->>BackgroundTasks: add_task(dispatch_survey_creation)
+
+    BackgroundTasks->>SurveyService: handle_survey_creation(journey_id, candidate_id, org_id)
+    SurveyService->>DB: INSERT CandidateFeedbackSurvey (Status=Draft, ExpiresAt=now+30d)
+    SurveyService->>SurveyService: raw_token = secrets.token_urlsafe(32)
+    SurveyService->>SurveyService: token_hash = SHA-256(raw_token)
+    SurveyService->>DB: INSERT CandidateFeedbackSurveyToken (token_hash, IsActive=True, ExpiresAt=now+30d)
+    SurveyService->>DB: UPDATE CandidateFeedbackSurvey SET Status=Sent, SurveyTokenID=token_id
+    SurveyService->>EventPublisher: publish_event("survey_sent", {survey_id, candidate_email, org_id})
+    EventPublisher->>NotificationService: deliver("survey_invitation", {survey_link, candidate_email})
+    NotificationService->>Candidate: Email with survey link containing token
+
+    Note over BackgroundScheduler,DB: Day 7 — Reminder Scheduler
+    BackgroundScheduler->>DB: SELECT CandidateFeedbackSurvey WHERE Status=Sent AND CreatedAt <= now-7d AND FirstReminderSentAt IS NULL
+    BackgroundScheduler->>SurveyService: send_reminder(survey_id)
+    SurveyService->>DB: UPDATE CandidateFeedbackSurvey SET FirstReminderSentAt=now
+    SurveyService->>EventPublisher: publish_event("survey_reminder", {survey_id, candidate_email, org_id})
+    EventPublisher->>NotificationService: deliver("survey_reminder", {survey_link, candidate_email})
+    NotificationService->>Candidate: Email with reminder and survey link
+
+    Note over BackgroundScheduler,DB: Day 30 — Silent Expiry
+    BackgroundScheduler->>DB: SELECT CandidateFeedbackSurvey WHERE Status=Sent AND ExpiresAt <= now
+    BackgroundScheduler->>DB: UPDATE CandidateFeedbackSurvey SET Status=Expired, CandidateFeedbackSurveyToken.IsActive=False
+    Note over BackgroundScheduler,DB: No notification sent; candidate sees 410 on survey access
+
+    Note over Candidate,SurveyService: Candidate Submits Survey (before Day 30)
+    Candidate->>SurveyService: GET /api/v1/surveys/{token}
+    SurveyService->>SurveyService: token_hash = SHA-256(token)
+    SurveyService->>DB: SELECT survey WHERE token_hash=? AND expires_at > now AND status != Expired
+    SurveyService->>Candidate: 200 Survey form + questions
+
+    Candidate->>SurveyService: POST /api/v1/surveys/{token}/submit {answers, comments}
+    SurveyService->>DB: INSERT CandidateFeedbackSurveyResponse
+    SurveyService->>DB: INSERT CandidateFeedbackSurveyAnswer (one per question)
+    SurveyService->>DB: UPDATE CandidateFeedbackSurvey SET Status=Completed, CompletedAt=now
+    SurveyService->>DB: UPDATE CandidateFeedbackSurveyToken SET IsActive=False (prevent resubmission)
+    SurveyService->>Candidate: 200 {success: true}
+
+    Note over Candidate,SurveyService: Resubmission Attempt
+    Candidate->>SurveyService: POST /api/v1/surveys/{token}/submit (again)
+    SurveyService->>DB: SELECT survey WHERE status=Completed
+    SurveyService-->>Candidate: 409 Conflict "This survey has already been completed and cannot be resubmitted."
+```
+
+### Candidate Feedback Survey Token-Based Portal Access
+
+```mermaid
+sequenceDiagram
+    participant Candidate
+    participant PortalRouter
+    participant SurveyService
+    participant DB
+
+    Candidate->>PortalRouter: GET /api/v1/surveys/{token}
+    PortalRouter->>SurveyService: validate_survey_token(token)
+    SurveyService->>SurveyService: token_hash = SHA-256(token)
+    SurveyService->>DB: SELECT CandidateFeedbackSurvey, CandidateFeedbackSurveyToken WHERE token_hash=?
+    alt token not found
+        SurveyService-->>PortalRouter: 401 Unauthorized
+        PortalRouter-->>Candidate: 401 "Invalid or expired survey link"
+    else token found but expired
+        SurveyService-->>PortalRouter: 410 Gone
+        PortalRouter-->>Candidate: 410 "Survey is no longer available"
+    else token found and active, survey not completed
+        SurveyService->>DB: SELECT CandidateFeedbackSurveyQuestion WHERE org_id=? ORDER BY display_order
+        SurveyService-->>PortalRouter: {survey_id, questions, token (validated)}
+        PortalRouter-->>Candidate: 200 Survey form (rendered in portal, no additional login required)
+    else survey already completed
+        SurveyService-->>PortalRouter: 410 Gone
+        PortalRouter-->>Candidate: 410 "Survey already completed"
     end
 ```
 
@@ -2026,6 +2121,109 @@ CREATE TABLE notification_records (
     deleted_by             UUID
 );
 CREATE INDEX idx_notification_records_status ON notification_records(status) WHERE deleted_at IS NULL;
+
+CREATE TABLE candidate_feedback_surveys (
+    candidate_feedback_survey_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id              UUID NOT NULL REFERENCES organizations(organization_id),
+    interview_journey_id         UUID NOT NULL REFERENCES interview_journeys(interview_journey_id),
+    candidate_id                 UUID NOT NULL,
+    survey_token_id              UUID,
+    status                       VARCHAR(20) NOT NULL DEFAULT 'Draft',
+    created_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at                   TIMESTAMPTZ NOT NULL,
+    first_reminder_sent_at       TIMESTAMPTZ,
+    completed_at                 TIMESTAMPTZ,
+    updated_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at                   TIMESTAMPTZ,
+    created_by                   UUID,
+    updated_by                   UUID,
+    deleted_by                   UUID,
+    CONSTRAINT ck_survey_status CHECK (status IN ('Draft', 'Sent', 'Completed', 'Expired'))
+);
+CREATE INDEX idx_surveys_journey ON candidate_feedback_surveys(interview_journey_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_surveys_status_expiry ON candidate_feedback_surveys(status, expires_at) WHERE deleted_at IS NULL AND status = 'Sent';
+
+CREATE TABLE candidate_feedback_survey_tokens (
+    candidate_feedback_survey_token_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    candidate_feedback_survey_id        UUID NOT NULL REFERENCES candidate_feedback_surveys(candidate_feedback_survey_id),
+    token_hash                         VARCHAR(64) NOT NULL UNIQUE,
+    created_at                         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at                         TIMESTAMPTZ NOT NULL,
+    is_active                          BOOLEAN NOT NULL DEFAULT true,
+    deleted_at                         TIMESTAMPTZ,
+    created_by                         UUID,
+    updated_by                         UUID,
+    deleted_by                         UUID
+);
+CREATE INDEX idx_survey_tokens_hash ON candidate_feedback_survey_tokens(token_hash) WHERE deleted_at IS NULL AND is_active = true;
+CREATE INDEX idx_survey_tokens_expiry ON candidate_feedback_survey_tokens(expires_at) WHERE deleted_at IS NULL AND is_active = true;
+
+CREATE TABLE candidate_feedback_survey_questions (
+    candidate_feedback_survey_question_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id                       UUID NOT NULL REFERENCES organizations(organization_id),
+    display_order                         SMALLINT NOT NULL CHECK (display_order BETWEEN 1 AND 10),
+    question_text                         VARCHAR(500) NOT NULL,
+    category                              VARCHAR(50) NOT NULL,
+    is_required                           BOOLEAN NOT NULL DEFAULT true,
+    created_at                            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at                            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at                            TIMESTAMPTZ,
+    created_by                            UUID,
+    updated_by                            UUID,
+    deleted_by                            UUID,
+    CONSTRAINT ck_question_category CHECK (category IN ('application', 'recruiter_experience', 'hiring_manager_experience', 'loop_interview_experience', 'offer_experience'))
+);
+CREATE INDEX idx_survey_questions_org ON candidate_feedback_survey_questions(organization_id) WHERE deleted_at IS NULL;
+
+CREATE TABLE candidate_feedback_survey_responses (
+    candidate_feedback_survey_response_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    candidate_feedback_survey_id          UUID NOT NULL REFERENCES candidate_feedback_surveys(candidate_feedback_survey_id),
+    organization_id                       UUID NOT NULL REFERENCES organizations(organization_id),
+    additional_comments                   VARCHAR(2000),
+    created_at                            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at                            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at                            TIMESTAMPTZ,
+    created_by                            UUID,
+    updated_by                            UUID,
+    deleted_by                            UUID
+);
+CREATE INDEX idx_survey_responses_survey ON candidate_feedback_survey_responses(candidate_feedback_survey_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_survey_responses_org ON candidate_feedback_survey_responses(organization_id) WHERE deleted_at IS NULL;
+
+CREATE TABLE candidate_feedback_survey_answers (
+    candidate_feedback_survey_answer_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    candidate_feedback_survey_response_id UUID NOT NULL REFERENCES candidate_feedback_survey_responses(candidate_feedback_survey_response_id),
+    candidate_feedback_survey_question_id UUID NOT NULL REFERENCES candidate_feedback_survey_questions(candidate_feedback_survey_question_id),
+    rating                               SMALLINT NOT NULL CHECK (rating BETWEEN 0 AND 10),
+    created_at                           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at                           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at                           TIMESTAMPTZ,
+    created_by                           UUID,
+    updated_by                           UUID,
+    deleted_by                           UUID,
+    CONSTRAINT uq_response_question UNIQUE (candidate_feedback_survey_response_id, candidate_feedback_survey_question_id)
+);
+CREATE INDEX idx_survey_answers_response ON candidate_feedback_survey_answers(candidate_feedback_survey_response_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_survey_answers_rating ON candidate_feedback_survey_answers(rating) WHERE deleted_at IS NULL;
+
+CREATE TABLE survey_feedback_templates (
+    survey_feedback_template_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id             UUID NOT NULL REFERENCES organizations(organization_id),
+    template_type               VARCHAR(50) NOT NULL,
+    subject                     VARCHAR(200) NOT NULL,
+    body_template               TEXT NOT NULL,
+    is_enabled                  BOOLEAN NOT NULL DEFAULT true,
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at                  TIMESTAMPTZ,
+    created_by                  UUID,
+    updated_by                  UUID,
+    deleted_by                  UUID,
+    CONSTRAINT ck_survey_template_type CHECK (template_type IN ('initial_survey_invitation', 'survey_reminder')),
+    CONSTRAINT uq_survey_template UNIQUE (organization_id, template_type)
+);
+CREATE INDEX idx_survey_templates_org ON survey_feedback_templates(organization_id, template_type) WHERE deleted_at IS NULL;
+```
 ```
 
 
@@ -2167,6 +2365,42 @@ CREATE INDEX idx_notification_records_status ON notification_records(status) WHE
 
 **Validates: Requirements 8.5**
 
+### Property 23: Candidate feedback survey creation and token generation
+
+*For any* InterviewJourney whose `current_stage` transitions OUT OF LoopInterview to any subsequent stage, a new `CandidateFeedbackSurvey` record must be created with `Status=Sent`, and a unique `CandidateFeedbackSurveyToken` must be generated with at least 32 bytes of cryptographic randomness (≥43 URL-safe characters). The survey's `ExpiresAt` must be set to exactly 30 days from creation. A second or subsequent transition OUT OF LoopInterview must not create a duplicate survey.
+
+**Validates: Requirements 9.1, 9.2, 9.7, 9.8**
+
+### Property 24: Survey token validation and expiry enforcement
+
+*For any* survey portal access attempt with a valid, active, non-expired token for a non-expired, non-completed survey, the portal must return the survey form with status 200. *For any* access attempt with an expired token, an invalid token, a token for an expired survey, or a token for a completed survey, the response must be 410 Gone without disclosing the specific reason.
+
+**Validates: Requirements 9.11, 9.12, 9.13**
+
+### Property 25: Survey submission atomicity and resubmission prevention
+
+*For any* valid survey submission, a single `CandidateFeedbackSurveyResponse` record and one `CandidateFeedbackSurveyAnswer` record per survey question must be created atomically in a single transaction. The parent survey's `Status` must be set to `Completed` and `CompletedAt` must be populated. The survey token must be deactivated (`IsActive=False`). *For any* resubmission attempt on the same token, the response must be 409 Conflict with message "This survey has already been completed and cannot be resubmitted."
+
+**Validates: Requirements 9.14, 9.15**
+
+### Property 26: Seven-day reminder window and silent 30-day expiry
+
+*For any* survey created at time T, the reminder scheduler must send exactly one reminder email between T+7 days and T+7 days + 1 hour (first scheduled check that captures the 7-day mark). *For any* survey not completed by T+30 days, the scheduler must silently set `Status=Expired` and `IsActive=False` on the token without sending a notification. No reminders must be sent for expired surveys.
+
+**Validates: Requirements 9.7, 9.10, 9.11**
+
+### Property 27: Survey response plain-text storage for analytics
+
+*For any* submitted `CandidateFeedbackSurveyAnswer`, the `rating` value must be stored in plain text (unencrypted) as an integer between 0 and 10 (where 0 represents N/A). The parent response's `additional_comments` must also be stored in plain text (max 2000 characters). All survey response and answer records must support direct SQL aggregation queries by `category`, `organization_id`, and time period without decryption.
+
+**Validates: Requirements 9.16**
+
+### Property 28: Survey-specific notification template independence
+
+*For any* survey-related notification event, the system must first check for a `SurveyFeedbackTemplate` with matching `organization_id` and `template_type` (initial_survey_invitation or survey_reminder) before falling back to a generic `NotificationTemplate`. Updates to survey templates must not affect general notification templates and vice versa.
+
+**Validates: Requirements 9.17, 9.18**
+
 ---
 
 ## Error Handling
@@ -2262,6 +2496,16 @@ All error responses follow the platform-standard JSON envelope:
 | Delivery failed (retrying) | — | Logged at WARNING `notification_delivery_failed` with attempt count |
 | Permanently failed after 5 attempts | — | Logged at ERROR `notification_permanently_failed`; `NotificationRecord.status=PermanentlyFailed` |
 
+### Survey Errors
+
+| Scenario | Status | Detail |
+|---|---|---|
+| Invalid, expired, or inactive survey token | 410 | `"Survey is no longer available"` (no disclosure of token validity) |
+| Survey already completed | 410 | `"Survey is no longer available"` |
+| Resubmission attempt on completed survey | 409 | `"This survey has already been completed and cannot be resubmitted."` |
+| Survey submission with N/A for all questions | — | Allowed; rating=0 for all answers stored for analytics |
+| Invalid rating value (not 0-10) | 422 | `"Rating must be an integer between 0 (N/A) and 10"` |
+| Additional comments exceed 2000 characters | 422 | `"Additional comments must not exceed 2000 characters"` |
 
 ---
 

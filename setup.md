@@ -173,7 +173,7 @@ Invoke is a task runner that automates common development tasks.
 poetry add invoke --group dev
 
 # Verify installation
-poetry run invoke --version
+uv run invoke --version
 ```
 
 ### Step 4: Clone and Navigate to the Project
@@ -201,10 +201,10 @@ pyenv local 3.12.0
 
 ```bash
 # Install all dependencies (including dev dependencies)
-poetry install
+uv sync
 
 # Verify installation
-poetry show  # Lists all installed packages
+uv show  # Lists all installed packages
 ```
 
 ---
@@ -274,7 +274,7 @@ ls -la /data/resumes
 
 ```bash
 # Start the PostgreSQL database container
-poetry run invoke db-start
+uv run invoke db-start
 
 # Verify the database is running
 docker ps  # Should show the PostgreSQL container
@@ -284,33 +284,128 @@ The database will be available at `localhost:5432` with credentials from your `.
 
 ### Step 2: Initialize Database Users and Schemas
 
+PostgreSQL extensions (vector, uuid-ossp) are now pre-created as superuser during initialization.
+
 ```bash
-# Initialize main database users and schemas
-poetry run invoke db-init-users
+# Initialize main app database users, schemas, and extensions
+uv run invoke db-init-users
+
+# Initialize test database users, schemas, extensions, and migrations
+uv run invoke db-init-test
 ```
 
-This creates the necessary database users and schemas defined in `db-scripts/create_user.sql`.
+These tasks:
+- Create database users (`kru_app`, `kru_test`)
+- Create schemas (`kru_app`, `kru_test`)
+- Create PostgreSQL extensions as superuser (`vector`, `uuid-ossp`)
+- Grant necessary privileges to application users
+- Set default schema for users
 
 ### Step 3: Run Database Migrations
 
 Alembic manages database schema migrations.
 
+#### For Application Database
+
 ```bash
-# Run all pending migrations
-poetry run invoke migrate
+# Run all pending migrations to app database
+uv run invoke migrate
 
 # Verify migrations were applied
-poetry run invoke db-status
+uv run invoke db-status
+
+# Get current migration version
+uv run alembic current
+```
+
+#### For Test Database
+
+```bash
+# Run all pending migrations to test database
+uv run invoke migrate-test
+
+# Verify test database migrations were applied
+TEST_DATABASE_HOST=localhost \
+TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db \
+TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 \
+uv run alembic current
+```
+
+#### Direct Alembic Commands (Advanced)
+
+```bash
+# Apply migrations to app database directly
+uv run alembic upgrade head
+
+# Apply migrations to test database directly
+TEST_DATABASE_HOST=localhost \
+TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db \
+TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 \
+DATABASE_HOST=localhost \
+DATABASE_PORT=5432 \
+DATABASE_NAME=kru_test_db \
+DATABASE_USER=kru_test \
+DATABASE_PASSWORD=kruTest2026 \
+uv run alembic upgrade head
+
+# Downgrade app database by 1 migration
+uv run alembic downgrade -1
+
+# Downgrade test database by 1 migration
+TEST_DATABASE_HOST=localhost \
+TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db \
+TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 \
+uv run alembic downgrade -1
+
+# Rollback all migrations (development only)
+uv run alembic downgrade base
+
+# Create a new migration after model changes
+uv run invoke db-revision --message "Add new_column to users table"
 ```
 
 ### Step 4: Verify Database Connection
 
 ```bash
-# Test the database connection
-poetry run invoke db-check
+# Test the application database connection
+uv run invoke db-check
+
+# Connect to app database via psql
+psql -h localhost -p 5432 -U kru_app -d kru_app_db
+
+# Connect to test database via psql
+psql -h localhost -p 5432 -U kru_test -d kru_test_db
 ```
 
-You should see output confirming the database connection is successful.
+You should see output confirming both database connections are successful.
+
+### Step 5: Verify Extensions Are Created
+
+```bash
+# Check vector extension in app database
+psql -h localhost -U postgres -d kru_app_db -c "\dx vector"
+
+# Check vector extension in test database
+psql -h localhost -U postgres -d kru_test_db -c "\dx vector"
+
+# Check uuid-ossp extension in both databases
+psql -h localhost -U postgres -d kru_app_db -c "\dx uuid-ossp"
+psql -h localhost -U postgres -d kru_test_db -c "\dx uuid-ossp"
+```
+
+Expected output shows both extensions installed:
+```
+             List of installed extensions
+  Name  | Version |   Schema   |              Description              
+--------+---------+------------+---------------------------------------
+ vector | 0.7.0   | public     | vector data type for similarity search
+```
 
 ---
 
@@ -432,7 +527,7 @@ PGADMIN_PORT=8080
 ### Step 2: Start pgAdmin
 
 ```bash
-poetry run invoke db-admin-start
+uv run invoke db-admin-start
 ```
 
 Once started, open your browser and navigate to **http://localhost:8080**.
@@ -470,7 +565,7 @@ After logging in, register your local PostgreSQL instance:
 ### Step 5: Stop pgAdmin
 
 ```bash
-poetry run invoke db-admin-stop
+uv run invoke db-admin-stop
 ```
 
 ---
@@ -481,7 +576,7 @@ poetry run invoke db-admin-stop
 
 ```bash
 # Start the development server
-poetry run invoke dev
+uv run invoke dev
 
 # The server will be available at http://localhost:8000
 ```
@@ -490,7 +585,7 @@ poetry run invoke dev
 
 ```bash
 # Activate the poetry virtual environment
-poetry shell
+# Or activate virtualenv from .venv/bin
 
 # Start the server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -516,44 +611,68 @@ docker-compose up
 Invoke provides convenient shortcuts for common development tasks. View all available tasks:
 
 ```bash
-poetry run invoke --list
+uv run invoke --list
 ```
 
-### Common Tasks
+### Common Database Tasks
 
 | Task | Command | Description |
 |------|---------|-------------|
-| **Start Dev Server** | `poetry run invoke dev` | Run the FastAPI server with auto-reload |
-| **Run Tests** | `poetry run invoke test` | Run the test suite with pytest |
-| **Run Tests with Coverage** | `poetry run invoke test-cov` | Run tests and generate coverage report |
-| **Lint Code** | `poetry run invoke lint` | Check code style with ruff |
-| **Format Code** | `poetry run invoke format` | Auto-format code with ruff |
-| **Database Migrations** | `poetry run invoke migrate` | Apply pending database migrations |
-| **Database Status** | `poetry run invoke db-status` | Show current migration status |
-| **Database Check** | `poetry run invoke db-check` | Test database connection |
-| **Type Check** | `poetry run invoke type-check` | Run type checking with mypy (if configured) |
+| **Start Database** | `uv run invoke db-start` | Start the PostgreSQL container |
+| **Stop Database** | `uv run invoke db-stop` | Stop the PostgreSQL container (data persists) |
+| **Remove Database** | `uv run invoke db-remove` | Remove PostgreSQL container and volume (deletes all data) |
+| **Init App Database** | `uv run invoke db-init-users` | Create app DB, users, schemas, and extensions |
+| **Init Test Database** | `uv run invoke db-init-test` | Create test DB, users, schemas, extensions, and migrations |
+| **Check Connection** | `uv run invoke db-check` | Test database connection |
+| **Database Status** | `uv run invoke db-status` | Show current migration status of app database |
+| **Apply Migrations** | `uv run invoke migrate` | Apply all pending migrations to app database |
+| **Apply Test Migrations** | `uv run invoke migrate-test` | Apply all pending migrations to test database |
+| **Rollback Migration** | `uv run invoke migrate-down` | Rollback last migration from app database |
+| **Reset Migrations** | `uv run invoke migrate-reset` | Downgrade all and re-apply all migrations (app DB) |
+| **Reset Test Migrations** | `uv run invoke migrate-reset-test` | Downgrade all and re-apply all migrations (test DB) |
+| **Create Migration** | `uv run invoke db-revision --message "..."` | Create new migration after model changes |
+| **Start pgAdmin** | `uv run invoke db-admin-start` | Start pgAdmin4 web interface (port 8080) |
+| **Stop pgAdmin** | `uv run invoke db-admin-stop` | Stop pgAdmin4 |
+
+### Common Application Tasks
+
+| Task | Command | Description |
+|------|---------|-------------|
+| **Start Dev Server** | `uv run invoke dev` | Run the FastAPI server with auto-reload |
+| **Run Tests** | `uv run invoke test` | Run the test suite with pytest |
+| **Run Tests with Coverage** | `uv run invoke test-cov` | Run tests and generate coverage report |
+| **Watch Tests** | `uv run invoke test-watch` | Run tests in watch mode (re-run on changes) |
+| **Lint Code** | `uv run invoke lint` | Check code style with ruff |
+| **Format Code** | `uv run invoke format` | Auto-format code with ruff |
+| **Format Check** | `uv run invoke format-check` | Check if code needs formatting |
+| **Type Check** | `uv run invoke type-check` | Run type checking with mypy |
+| **Full Check** | `uv run invoke check` | Run all checks (lint, format-check, type-check) |
+| **Clean Cache** | `uv run invoke clean` | Clean Python cache files |
+| **Show Dependencies** | `uv run invoke show-deps` | Show all installed dependencies |
+| **Setup Dev Environment** | `uv run invoke dev-setup` | Start DB and apply migrations (quick setup) |
+| **Complete Setup** | `uv run invoke setup` | Install deps, start DB, migrate (full setup) |
 
 ### Example: Running Tests
 
 ```bash
 # Run all tests
-poetry run invoke test
+uv run invoke test
 
 # Run tests with coverage report
-poetry run invoke test-cov
+uv run invoke test-cov
 
 # Run tests for a specific module
-poetry run invoke test --path tests/modules/auth/
+uv run invoke test --path tests/modules/auth/
 ```
 
 ### Example: Code Quality
 
 ```bash
 # Check code style
-poetry run invoke lint
+uv run invoke lint
 
 # Auto-format code
-poetry run invoke format
+uv run invoke format
 ```
 
 ---
@@ -596,28 +715,221 @@ Press Ctrl+C in the terminal
 
 ```bash
 # Stop PostgreSQL container (data persists in volume)
-poetry run invoke db-stop
+uv run invoke db-stop
 
 # Remove PostgreSQL container and optionally volume
-poetry run invoke db-remove
+uv run invoke db-remove
 ```
 
 ### Stop pgAdmin
 
 ```bash
 # Stop pgAdmin4 container
-poetry run invoke db-admin-stop
+uv run invoke db-admin-stop
 ```
 
 ### Stop All Services
 
 ```bash
 # Quick teardown of development environment
-poetry run invoke dev-teardown
+uv run invoke dev-teardown
 
 # This stops the PostgreSQL container (data persists)
 # To also remove the container and volume, run:
-poetry run invoke db-remove
+uv run invoke db-remove
+```
+
+---
+
+## Database Setup Reference
+
+### Complete Setup Commands
+
+#### Fresh Start (First Time)
+
+```bash
+# Step 1: Start PostgreSQL
+uv run invoke db-start
+
+# Step 2: Create app database (with extensions)
+uv run invoke db-init-users
+
+# Step 3: Create test database (with extensions and migrations)
+uv run invoke db-init-test
+
+# Step 4: Apply migrations to app database
+uv run invoke migrate
+
+# Step 5: Verify both databases
+uv run invoke db-status
+uv run db-check
+```
+
+#### Quick Development Setup
+
+```bash
+# All-in-one setup command
+uv run invoke dev-setup  # Starts DB and applies migrations
+
+# Or manual quick setup
+uv run invoke db-start
+uv run invoke db-init-users
+uv run invoke db-init-test
+uv run invoke migrate
+uv run invoke migrate-test
+```
+
+### Migration Workflows
+
+#### Working with Migrations
+
+```bash
+# View pending migrations
+uv run alembic history --verbose
+
+# Apply all pending migrations to app DB
+uv run invoke migrate
+
+# Apply all pending migrations to test DB
+uv run invoke migrate-test
+
+# Rollback 1 migration from app DB
+uv run alembic downgrade -1
+
+# Rollback 1 migration from test DB
+TEST_DATABASE_HOST=localhost \
+TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db \
+TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 \
+uv run alembic downgrade -1
+
+# Rollback all migrations and re-apply (app DB)
+uv run invoke migrate-reset
+
+# Rollback all migrations and re-apply (test DB)
+uv run invoke migrate-reset-test
+```
+
+#### Creating and Testing Migrations
+
+```bash
+# 1. Modify your SQLAlchemy models in app/modules/*/models.py
+
+# 2. Generate migration
+uv run invoke db-revision --message "Brief description of change"
+
+# 3. Review the migration file in alembic/versions/
+
+# 4. Test forward application
+uv run invoke migrate
+
+# 5. Test rollback
+uv run alembic downgrade -1
+
+# 6. Test re-apply
+uv run alembic upgrade +1
+
+# 7. Do the same for test database
+uv run invoke migrate-test
+TEST_DATABASE_HOST=localhost TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 uv run alembic downgrade -1
+TEST_DATABASE_HOST=localhost TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 uv run alembic upgrade +1
+```
+
+### Environment Variables for Test Database
+
+When running alembic commands directly on the test database, set these environment variables:
+
+```bash
+export TEST_DATABASE_HOST=localhost
+export TEST_DATABASE_PORT=5432
+export TEST_DATABASE_NAME=kru_test_db
+export TEST_DATABASE_USER=kru_test
+export TEST_DATABASE_PASSWORD=kruTest2026
+
+# Now you can use alembic commands
+uv run alembic current
+uv run alembic upgrade head
+uv run alembic downgrade -1
+```
+
+Or use inline environment variables:
+
+```bash
+TEST_DATABASE_HOST=localhost \
+TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db \
+TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 \
+uv run alembic current
+```
+
+### Alembic Direct Commands
+
+| Command | App DB | Test DB |
+|---------|--------|---------|
+| View current version | `uv run alembic current` | `TEST_DB_VARS uv run alembic current` |
+| View history | `uv run alembic history -v` | `TEST_DB_VARS uv run alembic history -v` |
+| Apply all pending | `uv run alembic upgrade head` | `TEST_DB_VARS uv run alembic upgrade head` |
+| Rollback 1 | `uv run alembic downgrade -1` | `TEST_DB_VARS uv run alembic downgrade -1` |
+| Rollback all | `uv run alembic downgrade base` | `TEST_DB_VARS uv run alembic downgrade base` |
+| Create migration | `uv run invoke db-revision --message "..."` | (Uses app DB) |
+
+Where `TEST_DB_VARS` = 
+```bash
+TEST_DATABASE_HOST=localhost \
+TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db \
+TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026
+```
+
+### psql Commands for Both Databases
+
+```bash
+# Connect to app database as app user
+psql -h localhost -p 5432 -U kru_app -d kru_app_db
+
+# Connect to test database as test user
+psql -h localhost -p 5432 -U kru_test -d kru_test_db
+
+# Connect as admin to app database
+psql -h localhost -p 5432 -U postgres -d kru_app_db
+
+# Connect as admin to test database
+psql -h localhost -p 5432 -U postgres -d kru_test_db
+
+# Useful psql commands
+\l              # List all databases
+\dt             # List all tables in current schema
+\dn             # List all schemas
+\dx             # List installed extensions
+\conninfo       # Show current connection info
+\d table_name   # Describe a table
+\q              # Quit psql
+```
+
+### PostgreSQL Extension Verification
+
+```bash
+# Check vector extension in app database
+psql -h localhost -U postgres -d kru_app_db -c "\dx vector"
+
+# Check vector extension in test database
+psql -h localhost -U postgres -d kru_test_db -c "\dx vector"
+
+# Check uuid-ossp in app database
+psql -h localhost -U postgres -d kru_app_db -c "\dx uuid-ossp"
+
+# Check uuid-ossp in test database
+psql -h localhost -U postgres -d kru_test_db -c "\dx uuid-ossp"
+
+# List all extensions
+psql -h localhost -U postgres -d kru_app_db -c "\dx"
 ```
 
 ---
@@ -702,11 +1014,11 @@ docker ps  # Should show the PostgreSQL container
 docker logs local-postgresql-db  # Or your PG_CONTAINER_NAME
 
 # Restart the database
-poetry run invoke db-stop
-poetry run invoke db-start
+uv run invoke db-stop
+uv run invoke db-start
 
 # Verify connection
-poetry run invoke db-check
+uv run invoke db-check
 ```
 
 ### Issue: Port Already in Use
@@ -727,20 +1039,84 @@ uvicorn app.main:app --port 8001
 
 ### Issue: Migration Errors
 
-**Problem:** `alembic.util.exc.CommandError: Can't locate revision identified by`
+**Problem:** `alembic.util.exc.CommandError: Can't locate revision identified by` or `DuplicateTableError`
 
 **Solution:**
 ```bash
 # Check migration status
-poetry run invoke db-status
+uv run invoke db-status
 
+# For app database:
 # Reset the database (WARNING: This deletes all data)
-poetry run invoke db-remove  # Choose 'y' to remove volume
-poetry run invoke db-start
-poetry run invoke db-init-users
+uv run invoke db-remove  # Choose 'y' to remove volume
+uv run invoke db-start
+uv run invoke db-init-users
+uv run invoke migrate
 
-# Re-run migrations
-poetry run invoke migrate
+# For test database:
+# Reset the test database
+uv run invoke db-remove  # Removes both app and test
+uv run invoke db-start
+uv run invoke db-init-users
+uv run invoke db-init-test
+```
+
+### Issue: Extension Permission Error
+
+**Problem:** `asyncpg.exceptions.InsufficientPrivilegeError: permission denied to create extension "vector"`
+
+**Solution:**
+```bash
+# Extensions are now pre-created as superuser during db-init
+# If you still get this error, reinitialize:
+
+uv run invoke db-init-users  # Creates extensions in app DB as superuser
+uv run invoke db-init-test   # Creates extensions in test DB as superuser
+uv run invoke migrate        # Apply migrations
+uv run invoke migrate-test   # Apply test migrations
+
+# Verify extensions exist:
+psql -h localhost -U postgres -d kru_app_db -c "\dx"
+psql -h localhost -U postgres -d kru_test_db -c "\dx"
+```
+
+### Issue: Test Database Not Initialized
+
+**Problem:** `psycopg2.OperationalError: FATAL: database "kru_test_db" does not exist`
+
+**Solution:**
+```bash
+# Initialize test database (creates DB, schema, user, extensions, migrations)
+uv run invoke db-init-test
+
+# Verify test database exists
+psql -h localhost -U postgres -l | grep kru_test_db
+
+# Verify migrations were applied
+TEST_DATABASE_HOST=localhost \
+TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db \
+TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 \
+uv run alembic current
+```
+
+### Issue: Migration Rollback/Re-apply Not Working
+
+**Problem:** Can't rollback or re-apply migrations
+
+**Solution:**
+```bash
+# For app database - full reset
+uv run invoke migrate-reset  # Downgrades all, then re-applies all
+
+# For test database - full reset
+uv run invoke migrate-reset-test  # Downgrades all, then re-applies all
+
+# Or manually step by step
+uv run alembic current           # Check current version
+uv run alembic downgrade base    # Rollback all
+uv run alembic upgrade head      # Re-apply all
 ```
 
 ### Issue: Virtual Environment Issues
@@ -759,10 +1135,10 @@ uv pip install --force-reinstall poetry
 poetry cache clear . --all
 
 # Reinstall dependencies
-poetry install --no-cache
+uv sync --no-cache
 
 # Verify installation
-poetry show
+uv show
 ```
 
 ### Issue: Docker Not Running
@@ -818,45 +1194,146 @@ cd talentKru-server
 python --version  # Should show Python 3.12.x
 
 # 3. Start the database
-poetry run invoke db-start
+uv run invoke db-start
 
-# 4. Start the development server
-poetry run invoke dev
+# 4. Initialize app and test databases (includes extensions)
+uv run invoke db-init-users
+uv run invoke db-init-test
 
-# 5. In another terminal, run tests as you develop
-poetry run invoke test
+# 5. Apply migrations to both databases
+uv run invoke migrate           # App DB
+uv run invoke migrate-test      # Test DB
 
-# 6. Check code quality
-poetry run invoke lint
+# 6. Start the development server
+uv run invoke dev
 
-# 7. When done, stop the server (Ctrl+C) and database
-poetry run invoke db-stop
+# 7. In another terminal, run tests as you develop
+uv run invoke test
+
+# 8. Check code quality
+uv run invoke lint
+uv run invoke format-check
+
+# 9. When done, stop the server (Ctrl+C) and database
+uv run invoke db-stop
+```
+
+### Testing Migrations Locally
+
+```bash
+# Full roundtrip: forward → rollback → re-apply
+
+# 1. Apply all migrations to app database
+uv run invoke migrate
+
+# 2. Check current migration version
+uv run invoke db-status
+
+# 3. Rollback the latest migration (app DB)
+uv run alembic downgrade -1
+
+# 4. Verify it rolled back
+uv run alembic current  # Should show previous migration
+
+# 5. Re-apply the migration
+uv run alembic upgrade +1
+
+# 6. Verify it applied successfully
+uv run invoke db-status  # Should show latest migration
+
+# Same for test database:
+uv run invoke migrate-test                                          # Apply
+TEST_DATABASE_HOST=localhost TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 uv run alembic current          # Check
+TEST_DATABASE_HOST=localhost TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 uv run alembic downgrade -1     # Rollback
+TEST_DATABASE_HOST=localhost TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 uv run alembic upgrade +1       # Re-apply
 ```
 
 ### Creating Database Migrations
 
+When you modify SQLAlchemy models, you need to create a database migration:
+
 ```bash
-# After modifying models, create a new migration
-poetry run invoke db-revision --message "Add new_column to users table"
+# After modifying models in app/modules/*/models.py, create a new migration
+uv run invoke db-revision --message "Add new_column to users table"
 
-# Review the generated migration file in alembic/versions/
+# This creates a new file in alembic/versions/ with the migration
+# Review the generated migration file for correctness
 
-# Apply the migration
-poetry run invoke migrate
+# Apply the migration to app database
+uv run invoke migrate
+
+# Apply the migration to test database
+uv run invoke migrate-test
+
+# Verify it applied to both
+uv run invoke db-status  # App DB
+uv run invoke migrate-reset-test  # Test DB migration status
 ```
+
+### Migration Best Practices
+
+```bash
+# Test your migration by running it forward and backward
+uv run invoke migrate                # Forward to app DB
+uv run alembic downgrade -1         # Rollback from app DB
+uv run alembic upgrade +1           # Re-apply to app DB
+
+# Do the same for test database
+uv run invoke migrate-test                    # Forward to test DB
+TEST_DATABASE_HOST=localhost \
+TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db \
+TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 \
+uv run alembic downgrade -1                   # Rollback from test DB
+TEST_DATABASE_HOST=localhost \
+TEST_DATABASE_PORT=5432 \
+TEST_DATABASE_NAME=kru_test_db \
+TEST_DATABASE_USER=kru_test \
+TEST_DATABASE_PASSWORD=kruTest2026 \
+uv run alembic upgrade +1                     # Re-apply to test DB
+```
+
+For detailed migration patterns, see `.kiro/steering/tech.md` (Database Management section) and `SCHEMA_EVOLUTION_GUIDELINES.md`.
 
 ### Running Specific Tests
 
 ```bash
+# Run all tests (uses test database)
+uv run invoke test
+
+# Run tests with coverage report
+uv run invoke test-cov
+
+# Run tests in watch mode (re-runs on changes)
+uv run invoke test-watch
+
 # Run tests for a specific module
-poetry run invoke test --path tests/modules/auth/
+uv run invoke test --path tests/modules/auth/
 
 # Run a specific test file
-poetry run invoke test --path tests/modules/auth/test_router.py
+uv run invoke test --path tests/modules/auth/test_router.py
 
 # Run a specific test function
-poetry run invoke test --path tests/modules/auth/test_router.py::test_login
+uv run invoke test --path tests/modules/auth/test_router.py::test_login
+
+# Run tests matching a pattern
+uv run pytest -k "test_candidate" -v
+
+# Run tests with verbose output
+uv run pytest -v tests/
+
+# Run tests with print statements visible
+uv run pytest -s tests/
 ```
+
+**Note:** All tests use the `kru_test_db` test database. Ensure you've run `uv run invoke db-init-test` before running tests.
 
 ---
 

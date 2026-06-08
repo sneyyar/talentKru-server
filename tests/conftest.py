@@ -37,6 +37,11 @@ from app.modules.organizations.models import Organization
 from app.modules.users.models import User, UserStatus, PasswordHistory
 from app.modules.auth.models import RefreshToken
 from app.modules.rbac.models import UserRole, Role, Privilege, RolePrivilege
+from app.modules.email_config.models import (
+    OrganizationEmailConfig,
+    SystemSetting,
+    ProviderType,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -81,8 +86,15 @@ for _key, _value in _TEST_DB_DEFAULTS.items():
 
 @pytest.fixture(scope="session")
 def database_url():
-    """Get the database URL from settings (session-scoped for all tests)."""
-    return settings.database_url
+    """Get the test database URL."""
+    # Build URL from TEST_DATABASE_* variables
+    test_host = os.getenv("TEST_DATABASE_HOST", "localhost")
+    test_port = os.getenv("TEST_DATABASE_PORT", "5432")
+    test_name = os.getenv("TEST_DATABASE_NAME", "kru_test_db")
+    test_user = os.getenv("TEST_DATABASE_USER", "kru_test")
+    test_password = os.getenv("TEST_DATABASE_PASSWORD", "kruTest2026")
+    
+    return f"postgresql+asyncpg://{test_user}:{test_password}@{test_host}:{test_port}/{test_name}"
 
 
 @pytest.fixture(scope="function")
@@ -92,6 +104,9 @@ async def engine(database_url):
     
     Function-scoped to align with event loop scope.
     Uses StaticPool for test isolation.
+    
+    The test database user (kru_test) has search_path=kru_test,public
+    which ensures tables are found in the kru_test schema.
     """
     from sqlalchemy.pool import StaticPool
     
@@ -101,6 +116,7 @@ async def engine(database_url):
         poolclass=StaticPool,  # Use StaticPool instead of NullPool for tests
         connect_args={"timeout": 30},
     )
+    
     yield engine
     await engine.dispose()
 

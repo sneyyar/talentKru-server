@@ -47,6 +47,12 @@ from app.modules.rbac.models import *  # noqa: F401, E402, F403
 from app.modules.users.models import *  # noqa: F401, E402, F403
 from app.modules.invitations.models import *  # noqa: F401, E402, F403
 from app.modules.password_reset.models import *  # noqa: F401, E402, F403
+from app.modules.email_config.models import *  # noqa: F401, E402, F403
+from app.modules.slots.models import *  # noqa: F401, E402, F403
+from app.modules.feedback.models import *  # noqa: F401, E402, F403
+from app.modules.availability.models import *  # noqa: F401, E402, F403
+from app.modules.notifications.models import *  # noqa: F401, E402, F403
+from app.modules.surveys.models import *  # noqa: F401, E402, F403
 from app.domain_events.models import *  # noqa: F401, E402, F403
 
 target_metadata = Base.metadata

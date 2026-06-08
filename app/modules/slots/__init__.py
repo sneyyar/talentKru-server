@@ -1,0 +1,1 @@
+"""Interview slots module."""

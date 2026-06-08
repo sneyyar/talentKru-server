@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     # Portal
     PORTAL_TOKEN_TTL_DAYS: int = 7
 
+    # Email (SMTP defaults for fallback when no org-specific config exists)
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    EMAIL_FROM_ADDRESS: str = ""
+    EMAIL_FROM_NAME: str = "TalentKru"
+
     # Reporting
     INTERVIEW_LEADERBOARD_DEFAULT_PERIOD_DAYS: int = 30
 

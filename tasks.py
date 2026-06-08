@@ -219,6 +219,176 @@ def db_status(c):
 
 
 @task
+def migrate_test(c):
+    """Apply all pending database migrations to test database."""
+    print("📦 Applying database migrations to test database...")
+
+    try:
+        # Get test database configuration from .env
+        test_db_host = get_env_var("TEST_DATABASE_HOST", "localhost")
+        test_db_port = get_env_var("TEST_DATABASE_PORT", "5432")
+        test_db_name = get_env_var("TEST_DATABASE_NAME")
+        test_db_user = get_env_var("TEST_DATABASE_USER")
+        test_db_password = get_env_var("TEST_DATABASE_PASSWORD")
+
+        # Set environment variables for alembic to use test database
+        env = os.environ.copy()
+        env["DATABASE_HOST"] = test_db_host
+        env["DATABASE_PORT"] = str(test_db_port)
+        env["DATABASE_NAME"] = test_db_name
+        env["DATABASE_USER"] = test_db_user
+        env["DATABASE_PASSWORD"] = test_db_password
+
+        print(f"   Host: {test_db_host}")
+        print(f"   Port: {test_db_port}")
+        print(f"   Database: {test_db_name}")
+        print()
+
+        # Run alembic upgrade with test database environment
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        if result.returncode != 0:
+            print(f"❌ Error applying migrations: {result.stderr}")
+            sys.exit(1)
+
+        print("✅ Test database migrations applied successfully!")
+
+    except (ValueError, RuntimeError) as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
+
+
+@task
+def migrate_reset(c):
+    """Reset app database: downgrade all migrations, then re-apply from start."""
+    print("🔄 Resetting app database migrations...")
+    print()
+
+    try:
+        # Get database configuration from .env
+        db_host = get_env_var("DATABASE_HOST", "localhost")
+        db_port = get_env_var("DATABASE_PORT", "5432")
+        db_name = get_env_var("DATABASE_NAME")
+        db_user = get_env_var("DATABASE_USER")
+        db_password = get_env_var("DATABASE_PASSWORD")
+
+        print(f"   Host: {db_host}")
+        print(f"   Port: {db_port}")
+        print(f"   Database: {db_name}")
+        print()
+
+        # Step 1: Downgrade all migrations to base
+        print("⬇️  Downgrading all migrations to base...")
+        result = subprocess.run(
+            ["alembic", "downgrade", "base"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        if result.returncode != 0:
+            print(f"⚠️  Warning: {result.stderr}")
+        else:
+            print("✅ Migrations downgraded to base")
+
+        print()
+
+        # Step 2: Re-apply all migrations from start
+        print("⬆️  Re-applying all migrations...")
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        if result.returncode != 0:
+            print(f"❌ Error re-applying migrations: {result.stderr}")
+            sys.exit(1)
+
+        print("✅ All migrations re-applied successfully!")
+        print()
+        print("✅ App database reset complete!")
+
+    except (ValueError, RuntimeError) as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
+
+
+@task
+def migrate_reset_test(c):
+    """Reset test database: downgrade all migrations, then re-apply from start."""
+    print("🔄 Resetting test database migrations...")
+    print()
+
+    try:
+        # Get test database configuration from .env
+        test_db_host = get_env_var("TEST_DATABASE_HOST", "localhost")
+        test_db_port = get_env_var("TEST_DATABASE_PORT", "5432")
+        test_db_name = get_env_var("TEST_DATABASE_NAME")
+        test_db_user = get_env_var("TEST_DATABASE_USER")
+        test_db_password = get_env_var("TEST_DATABASE_PASSWORD")
+
+        print(f"   Host: {test_db_host}")
+        print(f"   Port: {test_db_port}")
+        print(f"   Database: {test_db_name}")
+        print()
+
+        # Set environment variables for alembic to use test database
+        env = os.environ.copy()
+        env["DATABASE_HOST"] = test_db_host
+        env["DATABASE_PORT"] = str(test_db_port)
+        env["DATABASE_NAME"] = test_db_name
+        env["DATABASE_USER"] = test_db_user
+        env["DATABASE_PASSWORD"] = test_db_password
+
+        # Step 1: Downgrade all migrations to base
+        print("⬇️  Downgrading all migrations to base...")
+        result = subprocess.run(
+            ["alembic", "downgrade", "base"],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        if result.returncode != 0:
+            print(f"⚠️  Warning: {result.stderr}")
+        else:
+            print("✅ Migrations downgraded to base")
+
+        print()
+
+        # Step 2: Re-apply all migrations from start
+        print("⬆️  Re-applying all migrations...")
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+
+        if result.returncode != 0:
+            print(f"❌ Error re-applying migrations: {result.stderr}")
+            sys.exit(1)
+
+        print("✅ All migrations re-applied successfully!")
+        print()
+        print("✅ Test database reset complete!")
+
+    except (ValueError, RuntimeError) as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
+
+
+@task
 def db_check(c):
     """Test database connection."""
     print("🔗 Testing database connection...")
@@ -1184,6 +1354,9 @@ ns.add_task(check)
 # Database
 ns.add_task(migrate)
 ns.add_task(migrate_down, name="migrate-down")
+ns.add_task(migrate_test, name="migrate-test")
+ns.add_task(migrate_reset, name="migrate-reset")
+ns.add_task(migrate_reset_test, name="migrate-reset-test")
 ns.add_task(db_status, name="db-status")
 ns.add_task(db_check, name="db-check")
 ns.add_task(db_revision, name="db-revision")
