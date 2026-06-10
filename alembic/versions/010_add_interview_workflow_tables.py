@@ -532,6 +532,7 @@ def upgrade() -> None:
         sa.Column('created_by', postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column('updated_by', postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column('deleted_by', postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column('version', sa.Integer(), nullable=False, server_default='1'),
         sa.CheckConstraint(
             "template_type IN ('initial_survey_invitation', 'survey_reminder')",
             name='ck_template_type',

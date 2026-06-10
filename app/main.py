@@ -16,8 +16,10 @@ from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.auth_extraction import AuthExtractionMiddleware
 from app.modules.agents.router import router as agents_router
 from app.modules.auth.router import router as auth_router, get_revocation_cache
+from app.modules.availability.router import router as availability_router
 from app.modules.candidates.router import router as candidates_router
 from app.modules.candidates.service import CandidateService
+from app.modules.email_config.router import router as email_config_router
 from app.modules.feedback.router import router as feedback_router
 from app.modules.interviews.router import router as interviews_router
 from app.modules.invitations.router import router as invitations_router
@@ -25,6 +27,7 @@ from app.modules.job_posting.router import router as job_posting_router
 from app.modules.job_profile.router import router as job_profile_router
 from app.modules.journeys.router import router as journeys_router
 from app.modules.matching.router import router as matching_router
+from app.modules.notifications.router import router as notifications_router
 from app.modules.observability.router import router as observability_router
 from app.modules.organizations.router import router as organizations_router
 from app.modules.password_reset.router import router as password_reset_router
@@ -38,6 +41,10 @@ from app.modules.requisitions.router import router as requisitions_router
 from app.modules.resumes.router import router as resumes_router
 from app.modules.skills.router import router as skills_router
 from app.modules.slots.router import router as slots_router, prefs_router as interviewer_prefs_router
+from app.modules.surveys.router import router as surveys_router
+from app.modules.surveys.template_router import template_router as survey_template_router
+from app.modules.surveys.scheduler import run_survey_scheduler
+from app.modules.notifications.scheduler import run_reminder_check
 from app.modules.users.router import router as users_router
 from app.observability.logging import get_logger
 from app.observability.middleware import CorrelationIDMiddleware, correlation_id_var
@@ -91,6 +98,27 @@ async def _run_retention_scheduler() -> None:
             logger.error("retention_scheduler_error", error=str(e), exc_info=True)
 
 
+async def _run_notification_reminder_scheduler() -> None:
+    """
+    Background task that runs 24-hour reminder check every 15 minutes.
+    
+    Queries for interview slots within 24 hours of scheduled start and sends
+    reminder notifications to assigned interviewers.
+    
+    Requirement 8.5: Send 24-hour interview reminders to interviewers.
+    """
+    reminder_interval_minutes = settings.INTERVIEW_REMINDER_INTERVAL_MINUTES
+    while True:
+        try:
+            await asyncio.sleep(reminder_interval_minutes * 60)
+            await run_reminder_check()
+        except asyncio.CancelledError:
+            logger.info("Notification reminder scheduler cancelled")
+            raise
+        except Exception as e:
+            logger.error("notification_reminder_scheduler_error", error=str(e), exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -120,9 +148,11 @@ async def lifespan(app: FastAPI):
         raise
     
     # Start background schedulers
-    # Requirement 1.3, 6.5: Register expiry and retention schedulers
+    # Requirement 1.3, 6.5, 8.5, 9.10, 9.11, 9.26: Register expiry, retention, reminder, and survey schedulers
     expiry_task = asyncio.create_task(_run_expiry_scheduler())
     retention_task = asyncio.create_task(_run_retention_scheduler())
+    reminder_task = asyncio.create_task(_run_notification_reminder_scheduler())
+    survey_task = asyncio.create_task(run_survey_scheduler())
     
     logger.info("Background schedulers started")
     
@@ -135,6 +165,8 @@ async def lifespan(app: FastAPI):
         # Cancel scheduler tasks
         expiry_task.cancel()
         retention_task.cancel()
+        reminder_task.cancel()
+        survey_task.cancel()
         
         try:
             await expiry_task
@@ -145,6 +177,16 @@ async def lifespan(app: FastAPI):
             await retention_task
         except asyncio.CancelledError:
             logger.info("Retention scheduler cancelled")
+        
+        try:
+            await reminder_task
+        except asyncio.CancelledError:
+            logger.info("Notification reminder scheduler cancelled")
+        
+        try:
+            await survey_task
+        except asyncio.CancelledError:
+            logger.info("Survey scheduler cancelled")
 
 
 app = FastAPI(
@@ -226,6 +268,8 @@ app.include_router(job_profile_router, prefix="/api/v1")
 app.include_router(job_posting_router, prefix="/api/v1")
 app.include_router(skills_router, prefix="/api/v1")
 app.include_router(matching_router, prefix="/api/v1")
+
+# Interview workflow module routers
 app.include_router(journeys_router, prefix="/api/v1")
 app.include_router(slots_router, prefix="/api/v1")
 app.include_router(interviewer_prefs_router, prefix="/api/v1")
@@ -233,11 +277,17 @@ app.include_router(feedback_router, prefix="/api/v1")
 app.include_router(interviews_router, prefix="/api/v1")
 app.include_router(questionnaires_router, prefix="/api/v1")
 app.include_router(portal_router, prefix="/api/v1")
+app.include_router(email_config_router, prefix="/api/v1")
+app.include_router(availability_router, prefix="/api/v1")
+app.include_router(surveys_router, prefix="/api/v1")
+app.include_router(survey_template_router)
+
 app.include_router(privacy_router, prefix="/api/v1")
 app.include_router(reporting_router, prefix="/api/v1")
 
-# Internal agent router — uses its own /internal/agents prefix (no /api/v1)
+# Internal agent router — includes agents and notifications at /internal/agents prefix
 app.include_router(agents_router)
+app.include_router(notifications_router, prefix="/internal/agents")
 
 # Observability router — metrics endpoint, no /api/v1 prefix
 app.include_router(observability_router)

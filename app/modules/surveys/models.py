@@ -16,7 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID as UUID_TYPE, BOOLEAN
 
-from app.base_model import Base, AuditMixin
+from app.base_model import Base, AuditMixin, VersionMixin
 
 
 class SurveyStatus(str, enum.Enum):
@@ -25,6 +25,12 @@ class SurveyStatus(str, enum.Enum):
     SENT = "SENT"
     COMPLETED = "COMPLETED"
     EXPIRED = "EXPIRED"
+
+
+class SurveyTemplateType(str, enum.Enum):
+    """Survey feedback template type."""
+    INITIAL_SURVEY_INVITATION = "initial_survey_invitation"
+    SURVEY_REMINDER = "survey_reminder"
 
 
 class SurveyCategory(str, enum.Enum):
@@ -63,7 +69,6 @@ class CandidateFeedbackSurveyToken(Base, AuditMixin):
 
     candidate_feedback_survey_token_id = Column(UUID_TYPE(as_uuid=True), primary_key=True, default=uuid4)
     candidate_feedback_survey_id = Column(UUID_TYPE(as_uuid=True), nullable=False)
-    token = Column(String(128), nullable=False, unique=True)
     token_hash = Column(String(64), nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
@@ -120,7 +125,7 @@ class CandidateFeedbackSurveyAnswer(Base, AuditMixin):
     )
 
 
-class SurveyFeedbackTemplate(Base, AuditMixin):
+class SurveyFeedbackTemplate(Base, AuditMixin, VersionMixin):
     """Survey email template (Req 9.17)."""
     __tablename__ = "survey_feedback_templates"
 

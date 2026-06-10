@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Portal
     PORTAL_TOKEN_TTL_DAYS: int = 7
 
+    # Schedulers
+    INTERVIEW_REMINDER_INTERVAL_MINUTES: int = 15  # Check every 15 minutes for 24-hour reminders
+    SURVEY_SCHEDULER_INTERVAL_MINUTES: int = 15  # Check every 15 minutes for 7-day/30-day surveys
+
     # Email (SMTP defaults for fallback when no org-specific config exists)
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587

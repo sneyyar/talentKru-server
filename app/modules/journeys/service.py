@@ -29,6 +29,50 @@ from app.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
+
+async def _create_survey_on_loop_exit(
+    journey_id: UUID,
+    candidate_id: UUID,
+    org_id: UUID,
+) -> None:
+    """
+    Background task: Create a survey when journey exits LoopInterview stage.
+
+    Opens a new database session, calls SurveyService.create_survey_for_journey,
+    publishes a survey_created event on success, logs ERROR with correlation_id on exception.
+
+    Requirements: 9.7
+    """
+    from app.database import AsyncSessionFactory
+    from app.modules.surveys.service import CandidateFeedbackSurveyService
+    from app.observability.middleware import correlation_id_var
+
+    correlation_id = correlation_id_var.get(None)
+
+    try:
+        async with AsyncSessionFactory() as db:
+            service = CandidateFeedbackSurveyService(db)
+            survey, raw_token = await service.create_survey_for_journey(
+                journey_id, candidate_id, org_id
+            )
+            await db.commit()
+
+            logger.info(
+                "survey_created_on_loop_exit",
+                survey_id=str(survey.candidate_feedback_survey_id),
+                journey_id=str(journey_id),
+                correlation_id=correlation_id,
+            )
+    except Exception as exc:
+        logger.error(
+            "survey_creation_failed",
+            journey_id=str(journey_id),
+            error=str(exc),
+            correlation_id=correlation_id,
+            exc_info=True,
+        )
+
+
 # Terminal stages (no sub-status, no further transitions)
 TERMINAL_STAGES = {
     JourneyStage.REJECTED,
@@ -251,6 +295,28 @@ class InterviewJourneyService:
             self.db,
             background_tasks=background_tasks,
         )
+
+        # Trigger survey creation when exiting LoopInterview (Req 9.7)
+        if (
+            from_stage == JourneyStage.LOOP_INTERVIEW
+            and to_stage
+            in {
+                JourneyStage.PANEL_REVIEW,
+                JourneyStage.OFFER_PENDING,
+                JourneyStage.OFFER_EXTENDED,
+                JourneyStage.OFFER_ACCEPTED,
+                JourneyStage.OFFER_DECLINED,
+                JourneyStage.REJECTED,
+                JourneyStage.WITHDRAWN,
+            }
+        ):
+            if background_tasks:
+                background_tasks.add_task(
+                    _create_survey_on_loop_exit,
+                    journey.interview_journey_id,
+                    journey.candidate_id,
+                    journey.organization_id,
+                )
 
         logger.info(
             "journey_stage_transitioned",

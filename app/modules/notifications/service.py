@@ -40,6 +40,7 @@ class NotificationService:
         org_id: UUID,
         recipient_email: str,
         locale: str | None = None,
+        use_survey_template: bool = False,
     ) -> NotificationRecord | None:
         """
         Deliver a notification email with retry logic.
@@ -48,6 +49,7 @@ class NotificationService:
         1. Check global email_notifications_enabled system setting
         2. Check organization email_notifications_enabled config
         3. Resolve template (locale-specific then org-default fallback)
+           - If use_survey_template=True, try SurveyFeedbackTemplate first, then fall back to NotificationTemplate
         4. Check if template is disabled
         5. Render subject and body from template
         6. Insert NotificationRecord (status=PENDING)
@@ -59,11 +61,12 @@ class NotificationService:
             org_id: Organization ID
             recipient_email: Recipient email address
             locale: Optional locale code for locale-specific template variant (e.g., "en_US")
+            use_survey_template: If True, try SurveyFeedbackTemplate before NotificationTemplate (Requirement 9.17)
 
         Returns:
             NotificationRecord if delivery attempted, None if skipped due to disabled settings
 
-        Requirements: 8.3, 8.4, 8.5, 8.6, 8.7, 8.8
+        Requirements: 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 9.17
         """
         # Check global system setting first
         if not await self._is_delivery_enabled_global():
@@ -84,7 +87,7 @@ class NotificationService:
             return None
 
         # Resolve template with locale fallback
-        template = await self._resolve_template(event_type, org_id, locale)
+        template = await self._resolve_template(event_type, org_id, locale, use_survey_template=use_survey_template)
         if not template:
             logger.info(
                 "notification_template_not_found",
@@ -98,7 +101,7 @@ class NotificationService:
         if not template.is_enabled:
             logger.info(
                 "notification_template_disabled",
-                template_id=str(template.notification_template_id),
+                template_id=str(getattr(template, 'notification_template_id', None) or getattr(template, 'survey_feedback_template_id', None)),
                 event_type=event_type,
             )
             return None
@@ -162,20 +165,51 @@ class NotificationService:
         event_type: str,
         org_id: UUID,
         locale: str | None = None,
+        use_survey_template: bool = False,
     ) -> NotificationTemplate | None:
         """
         Resolve template with locale fallback.
 
-        First tries locale-specific template, then falls back to org-default (no locale).
+        If use_survey_template=True:
+        1. Try SurveyFeedbackTemplate with matching template_type (Requirement 9.17)
+        2. Fall back to NotificationTemplate
+
+        Otherwise:
+        - Try locale-specific NotificationTemplate, then falls back to org-default (no locale)
 
         Args:
-            event_type: Event type
+            event_type: Event type (survey_invitation, survey_reminder, etc.)
             org_id: Organization ID
             locale: Optional locale code
+            use_survey_template: If True, try SurveyFeedbackTemplate first (Requirement 9.17)
 
         Returns:
-            NotificationTemplate if found, None otherwise
+            Template object if found, None otherwise
         """
+        if use_survey_template:
+            # Try SurveyFeedbackTemplate first (Requirement 9.17)
+            from app.modules.surveys.models import SurveyFeedbackTemplate, SurveyTemplateType
+
+            # Map event_type to SurveyTemplateType
+            template_type_map = {
+                "survey_invitation": SurveyTemplateType.INITIAL_SURVEY_INVITATION,
+                "survey_reminder": SurveyTemplateType.SURVEY_REMINDER,
+            }
+            template_type = template_type_map.get(event_type)
+
+            if template_type:
+                result = await self.db.execute(
+                    select(SurveyFeedbackTemplate).where(
+                        SurveyFeedbackTemplate.organization_id == org_id,
+                        SurveyFeedbackTemplate.template_type == template_type,
+                        SurveyFeedbackTemplate.deleted_at.is_(None),
+                    )
+                )
+                survey_template = result.scalar_one_or_none()
+                if survey_template:
+                    return survey_template
+
+        # Fall back to NotificationTemplate (or direct lookup if not using survey template)
         # Try locale-specific template first if locale provided
         if locale:
             result = await self.db.execute(

@@ -20,8 +20,10 @@ from app.audit_models import AuditLog
 @pytest.mark.asyncio
 async def test_write_audit_log_with_db_session():
     """Test that write_audit_log persists to database when db session is provided."""
-    # Create a mock AsyncSession
-    mock_db = AsyncMock()
+    # Create a mock AsyncSession with separate sync and async mocks
+    mock_db = MagicMock()
+    mock_db.add = MagicMock()  # add() is synchronous
+    mock_db.flush = AsyncMock()  # flush() is asynchronous
     
     actor_id = str(uuid4())
     org_id = uuid4()
@@ -83,7 +85,9 @@ async def test_write_audit_log_without_db_session():
 @pytest.mark.asyncio
 async def test_write_audit_log_with_uuid_conversion():
     """Test that write_audit_log converts UUIDs to strings."""
-    mock_db = AsyncMock()
+    mock_db = MagicMock()
+    mock_db.add = MagicMock()  # add() is synchronous
+    mock_db.flush = AsyncMock()  # flush() is asynchronous
     
     actor_id = uuid4()
     org_id = uuid4()
@@ -113,7 +117,9 @@ async def test_write_audit_log_with_uuid_conversion():
 @pytest.mark.asyncio
 async def test_write_audit_log_with_default_timestamp():
     """Test that write_audit_log uses current time if timestamp not provided."""
-    mock_db = AsyncMock()
+    mock_db = MagicMock()
+    mock_db.add = MagicMock()  # add() is synchronous
+    mock_db.flush = AsyncMock()  # flush() is asynchronous
     
     before = datetime.now(timezone.utc)
     
@@ -136,7 +142,9 @@ async def test_write_audit_log_with_default_timestamp():
 @pytest.mark.asyncio
 async def test_write_audit_log_with_obo_by():
     """Test that write_audit_log correctly handles obo_by parameter."""
-    mock_db = AsyncMock()
+    mock_db = MagicMock()
+    mock_db.add = MagicMock()  # add() is synchronous
+    mock_db.flush = AsyncMock()  # flush() is asynchronous
     
     actor_id = str(uuid4())
     obo_by = str(uuid4())
@@ -159,7 +167,9 @@ async def test_write_audit_log_with_obo_by():
 @pytest.mark.asyncio
 async def test_write_audit_log_with_changed_values():
     """Test that write_audit_log correctly handles changed_values parameter."""
-    mock_db = AsyncMock()
+    mock_db = MagicMock()
+    mock_db.add = MagicMock()  # add() is synchronous
+    mock_db.flush = AsyncMock()  # flush() is asynchronous
     
     changed_values = {
         "status": {"old": "Active", "new": "Locked"},
