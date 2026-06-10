@@ -344,10 +344,15 @@ All code follows the conventions established in the Platform Foundation and Iden
     - `PATCH /api/v1/notification-templates/{template_id}` — `require_role("Administrator", "SuperAdministrator")`
     - `GET /api/v1/notification-records` — `require_role("Administrator", "SuperAdministrator")`; paginated
     - _Requirements: 8.7, 8.8, 8.9, 8.10_
+    - `GET /api/v1/notifications` — `require_role("Administrator", "SuperAdministrator")`; list notification templates for org
+    - `POST /api/v1/notifications/templates` — `require_role("Administrator", "SuperAdministrator")`; create template; returns 201
+    - `PATCH /api/v1/notifications/templates/{template_id}` — `require_role("Administrator", "SuperAdministrator")`
+    - `GET /api/v1/notifications/templates/{template_id}` — `require_role("Administrator", "SuperAdministrator")`
+    - _Requirements: 8.1, 8.6, 8.7, 8.8_
 
 
-- [~] 14. Implement CandidateFeedbackSurveyService and survey router
-  - [~] 14.1 Implement `CandidateFeedbackSurveyService` in `app/modules/surveys/service.py`
+- [x] 14. Implement CandidateFeedbackSurveyService and survey router
+  - [x] 14.1 Implement `CandidateFeedbackSurveyService` in `app/modules/surveys/service.py`
     - `create_survey_for_journey`: check if survey already exists for `(journey_id)` (skip if yes); generate `raw_token = secrets.token_urlsafe(32)` (≥43 URL-safe chars), compute `token_hash = SHA-256(raw_token)`, set `expires_at = now() + 30 days`; insert `CandidateFeedbackSurvey(status=DRAFT, expires_at=...)`; insert `CandidateFeedbackSurveyToken(token_hash, is_active=True, expires_at=...)`; update survey `status=SENT`, `survey_token_id=token_id`; `await db.flush()`; publish event `survey_created` with candidate email
     - `get_survey_by_token`: compute `token_hash = SHA-256(token)`; query `CandidateFeedbackSurveyToken WHERE token_hash=? AND is_active=True AND expires_at > now()` (401 if not found); fetch survey; if `status=EXPIRED` or `status=COMPLETED` return 410; else fetch `CandidateFeedbackSurveyQuestion` for org
     - `submit_survey`: call `get_survey_by_token`; validate `rating` values 0–10 (422); validate `additional_comments` max 2000 chars (422); start transaction; insert `CandidateFeedbackSurveyResponse`; for each question insert `CandidateFeedbackSurveyAnswer` with rating and answer_id; update survey `status=COMPLETED, completed_at=now()`; set `token.is_active=False`; `await db.commit()`
@@ -392,7 +397,7 @@ All code follows the conventions established in the Platform Foundation and Iden
     - Use `@given(survey_template_enabled=st.booleans(), general_template_enabled=st.booleans())` with `max_examples=100`
     - Create both survey template and general template; trigger survey event → uses survey template if exists; general template updates must not affect survey templates and vice versa
 
-  - [~] 14.8 Implement survey router in `app/modules/surveys/router.py`
+  - [x] 14.8 Implement survey router in `app/modules/surveys/router.py`
     - `GET /api/v1/surveys/{token}` — unauthenticated; returns 200 with survey form and questions or 410 if invalid/expired/completed
     - `POST /api/v1/surveys/{token}/submit` — unauthenticated; accepts `{answers: {question_id: rating, ...}, additional_comments: string}`; returns 200 on success, 409 if already completed, 410 if expired
     - Survey form endpoints require no additional authentication beyond token validation
@@ -400,12 +405,12 @@ All code follows the conventions established in the Platform Foundation and Iden
 
 
 - [x] 15. Wire survey creation event to journey stage transitions
-  - [~] 15.1 Update `InterviewJourneyService.transition_stage` in `app/modules/journeys/service.py`
+  - [x] 15.1 Update `InterviewJourneyService.transition_stage` in `app/modules/journeys/service.py`
     - When `to_stage` is any stage after LoopInterview (PanelReview, OfferPending, OfferExtended, OfferAccepted, OfferDeclined, Rejected, Withdrawn), call `background_tasks.add_task(_create_survey_on_loop_exit, journey.interview_journey_id, journey.candidate_id, journey.organization_id)`
     - `_create_survey_on_loop_exit`: open new session; call `SurveyService.create_survey_for_journey`; on success publish event `survey_created`; on exception log ERROR with correlation_id
     - _Requirements: 9.7_
 
-  - [~] 15.2 Connect survey domain events to notification delivery
+  - [x] 15.2 Connect survey domain events to notification delivery
     - In `app/domain_events/handlers.py`, register handlers for: `survey_created` → call `NotificationService.deliver("survey_invitation", {survey_link, candidate_email}, org_id)` (Requirement 9.9); `survey_reminder` → call `NotificationService.deliver("survey_reminder", {survey_link, candidate_email}, org_id)` (Requirement 9.10)
     - Both handlers should use `SurveyFeedbackTemplate` for rendering (Requirement 9.17, 9.18)
     - _Requirements: 9.9, 9.10, 9.17, 9.18_
@@ -433,164 +438,14 @@ All code follows the conventions established in the Platform Foundation and Iden
 
 
 - [x] 17. Wire domain events to survey notification delivery
-  - [x] 14.1 Connect domain event handlers to `NotificationService.deliver`
-    - In `app/domain_events/handlers.py` (or equivalent), register handlers for: `journey_stage_changed` → notify candidate, recruiter, and hiring manager (Requirement 8.2); `candidate_questionnaire_response_created` → notify candidate with portal URL (Requirement 8.3); `interview_slot_created` → notify assigned interviewer (Requirement 8.4); `offer_accepted` → notify all interviewers on the journey (Requirement 8.6)
-    - Each handler calls `NotificationService.deliver` with the appropriate `event_type`, `payload`, `org_id`, and `recipient_email`
-    - Ensure `publish_event()` persist-first pattern is maintained: domain event row inserted before `BackgroundTasks.add_task` dispatches the handler
-    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.6_
-
-  - [x] 14.2 Implement 24-hour reminder background scheduler
-    - Create `app/modules/notifications/scheduler.py` with `run_reminder_check()` async function
-    - Query `InterviewSlot WHERE status=SCHEDULED AND invitation_status IN ('Pending', 'Accepted') AND scheduled_start BETWEEN now() AND now()+24h AND deleted_at IS NULL`
-    - For each slot call `NotificationService.send_24h_reminder(slot_id, org_id)`
-    - Register scheduler to run periodically (e.g., every 15 minutes via APScheduler or equivalent)
-    - _Requirements: 8.5_
-
-
-- [-] 15. Register all routers and wire module into FastAPI application
-  - [ ] 15.1 Register all interview-workflow routers in `app/main.py` or the module registry
-    - Include routers for: `journeys`, `slots`, `feedback`, `questionnaires`, `portal`, `email_config`, `availability`, `notifications`
-    - Verify all route prefixes, tags, and OpenAPI metadata are consistent with the API design
-    - Ensure `require_role()` dependencies are applied on every protected endpoint
-    - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.7_
-
-  - [ ] 15.2 Add smoke test assertions for module integrity
-    - Assert all required enum values present: `JourneyStage`, `JourneyOverallStatus`, `SlotType`, `SlotStatus`, `FeedbackType`, `FeedbackStatus`, `ResponseStatus`, `NotificationStatus`, `ProviderType`
-    - Assert `system_settings` table contains `email_notifications_enabled = 'true'` seed row after migration
-    - Assert `PORTAL_TOKEN_TTL_DAYS` and `AGENT_API_KEY` env vars are set and parseable
-    - Assert all 8 mutable entities with `VersionMixin` have `version_id_col` configured: `InterviewJourney`, `InterviewSlot`, `InterviewFeedback`, `InterviewerPreference`, `Questionnaire`, `CandidateQuestionnaireResponse`, `OrganizationEmailConfig`, `NotificationTemplate`
-    - _Requirements: 1.1, 5.1, 6.1, 8.7_
-
-- [ ] 16. Final checkpoint — all tests pass
-  - Ensure all tests pass, ask the user if questions arise.
-
----
-
-## Notes
-
-- Tasks marked with `*` are optional and can be skipped for a faster MVP
-- Each task references specific requirements for traceability
-- Checkpoints ensure incremental validation at logical module boundaries
-- Property tests validate universal correctness properties using Hypothesis with `max_examples=100`
-- Unit tests validate specific examples, edge cases, and error conditions
-- Tag each property test: `# Feature: interview-workflow, Property N: <property_text>`
-- All PII fields use `encrypt_field`/`decrypt_field` (AES-256-GCM); never log or return plaintext secrets
-- All service methods use `await db.flush()` (not `commit()`) — the router layer owns the transaction boundary
-- Domain events follow persist-first pattern: event row inserted before background task dispatched
-
-
-## Task Dependency Graph
-
-```json
-{
-  "waves": [
-    { "id": 0, "tasks": ["1.1", "2.1", "2.2"] },
-    { "id": 1, "tasks": ["2.3", "3.1", "3.2"] },
-    { "id": 2, "tasks": ["4.1", "5.1", "7.1", "8.1", "9.1", "11.1", "12.1", "13.1", "13.2"] },
-    { "id": 3, "tasks": ["4.2", "4.3", "4.4", "4.5", "5.2", "5.3", "5.4", "5.5", "7.2", "7.3", "8.2", "8.3", "8.4", "9.2", "9.3", "11.2", "12.2", "12.3", "12.4", "13.3", "13.4", "13.5"] },
-    { "id": 4, "tasks": ["4.6", "5.6", "7.4", "8.5", "9.4", "11.3", "12.5", "13.6"] },
-    { "id": 5, "tasks": ["14.1", "14.2"] },
-    { "id": 6, "tasks": ["15.1", "15.2"] }
-  ]
-}
-```
-
-
-- [ ] 14. Implement CandidateFeedbackSurveyService and survey router
-  - [ ] 14.1 Implement `CandidateFeedbackSurveyService` in `app/modules/surveys/service.py`
-    - `create_survey_for_journey`: check if survey already exists for `(journey_id)` (skip if yes); generate `raw_token = secrets.token_urlsafe(32)` (≥43 URL-safe chars), compute `token_hash = SHA-256(raw_token)`, set `expires_at = now() + 30 days`; insert `CandidateFeedbackSurvey(status=DRAFT, expires_at=...)`; insert `CandidateFeedbackSurveyToken(token_hash, is_active=True, expires_at=...)`; update survey `status=SENT`, `survey_token_id=token_id`; `await db.flush()`; publish event `survey_created` with candidate email
-    - `get_survey_by_token`: compute `token_hash = SHA-256(token)`; query `CandidateFeedbackSurveyToken WHERE token_hash=? AND is_active=True AND expires_at > now()` (401 if not found); fetch survey; if `status=EXPIRED` or `status=COMPLETED` return 410; else fetch `CandidateFeedbackSurveyQuestion` for org
-    - `submit_survey`: call `get_survey_by_token`; validate `rating` values 0–10 (422); validate `additional_comments` max 2000 chars (422); start transaction; insert `CandidateFeedbackSurveyResponse`; for each question insert `CandidateFeedbackSurveyAnswer` with rating and answer_id; update survey `status=COMPLETED, completed_at=now()`; set `token.is_active=False`; `await db.commit()`
-    - `send_reminder`: query surveys `WHERE status=SENT AND created_at <= now()-7d AND first_reminder_sent_at IS NULL`; update `first_reminder_sent_at=now()`; publish event `survey_reminder` with candidate email
-    - `expire_surveys`: query surveys `WHERE status=SENT AND expires_at <= now()`; update `status=EXPIRED`; deactivate tokens `WHERE expires_at <= now()` and `is_active=True`
-    - `get_survey_questions`: org-scoped query for questions, ordered by `display_order`
-    - _Requirements: 9.1, 9.2, 9.3, 9.6, 9.7, 9.8, 9.9, 9.14, 9.15, 9.16_
-
-  - [ ]* 14.2 Write property test for survey creation and token entropy (Property 23)
-    - **Property 23: Candidate feedback survey creation and token generation**
-    - **Validates: Requirements 9.1, 9.2, 9.7, 9.8**
-    - Use `@given(n_transitions=st.integers(min_value=1, max_value=3))` with `max_examples=100`
-    - Transition OUT OF LoopInterview → survey created, token generated with ≥43 URL-safe chars, `expires_at == creation_time + 30 days`; second transition for same journey → no duplicate survey; first transition should have `status=SENT` after token creation
-
-  - [ ]* 14.3 Write property test for survey token validation and expiry (Property 24)
-    - **Property 24: Survey token validation and expiry enforcement**
-    - **Validates: Requirements 9.11, 9.12, 9.13**
-    - Use `@given(token_valid=st.booleans(), survey_expired=st.booleans(), survey_completed=st.booleans(), minutes_offset=st.integers(min_value=-60, max_value=1800))` with `max_examples=100`
-    - Valid token + non-expired + not-completed survey → 200 with form; invalid token → 410; expired survey → 410; completed survey → 410; all 410 responses must have identical message (no disclosure)
-
-  - [ ]* 14.4 Write property test for survey submission atomicity and resubmission prevention (Property 25)
-    - **Property 25: Survey submission atomicity and resubmission prevention**
-    - **Validates: Requirements 9.14, 9.15**
-    - Use `@given(n_questions=st.integers(min_value=1, max_value=10), ratings=st.lists(st.integers(min_value=0, max_value=10), min_size=1, max_size=10), n_submissions=st.integers(min_value=1, max_value=3))` with `max_examples=100`
-    - First submission with valid ratings → one Response + N Answers created atomically, survey `status=COMPLETED`, token `is_active=False`; second submission on same token → 409 with exact message; third submission → 409 again
-
-  - [ ]* 14.5 Write property test for seven-day reminder and thirty-day expiry (Property 26)
-    - **Property 26: Seven-day reminder window and silent 30-day expiry**
-    - **Validates: Requirements 9.7, 9.10, 9.11**
-    - Use `@given(hours_since_creation=st.floats(min_value=0.0, max_value=744.0))` with `max_examples=100`; mock scheduler time
-    - Survey created at T; at T+7d-1h no reminder sent; at T+7d to T+7d+1h exactly one reminder sent (call `send_reminder`); at T+30d survey and token `status=EXPIRED`, no notification sent; reaccess after expiry → 410 silent
-
-  - [ ]* 14.6 Write property test for survey response plain-text storage (Property 27)
-    - **Property 27: Survey response plain-text storage for analytics**
-    - **Validates: Requirements 9.16**
-    - Use `@given(ratings=st.lists(st.integers(min_value=0, max_value=10), min_size=1, max_size=10), comments=st.text(max_size=2000))` with `max_examples=100`
-    - Submit survey with various ratings and comments → fetch from DB via plain SQL without decryption → all values readable, aggregatable by category and time period
-
-  - [ ]* 14.7 Write property test for survey-specific notification templates (Property 28)
-    - **Property 28: Survey-specific notification template independence**
-    - **Validates: Requirements 9.17, 9.18**
-    - Use `@given(survey_template_enabled=st.booleans(), general_template_enabled=st.booleans())` with `max_examples=100`
-    - Create both survey template and general template; trigger survey event → uses survey template if exists; general template updates must not affect survey templates and vice versa
-
-  - [ ] 14.8 Implement survey router in `app/modules/surveys/router.py`
-    - `GET /api/v1/surveys/{token}` — unauthenticated; returns 200 with survey form and questions or 410 if invalid/expired/completed
-    - `POST /api/v1/surveys/{token}/submit` — unauthenticated; accepts `{answers: {question_id: rating, ...}, additional_comments: string}`; returns 200 on success, 409 if already completed, 410 if expired
-    - Survey form endpoints require no additional authentication beyond token validation
-    - _Requirements: 9.9, 9.12, 9.13, 9.14, 9.15_
-
-
-- [ ] 15. Wire survey creation event to journey stage transitions
-  - [ ] 15.1 Update `InterviewJourneyService.transition_stage` in `app/modules/journeys/service.py`
-    - When `to_stage` is any stage after LoopInterview (PanelReview, OfferPending, OfferExtended, OfferAccepted, OfferDeclined, Rejected, Withdrawn), call `background_tasks.add_task(_create_survey_on_loop_exit, journey.interview_journey_id, journey.candidate_id, journey.organization_id)`
-    - `_create_survey_on_loop_exit`: open new session; call `SurveyService.create_survey_for_journey`; on success publish event `survey_created`; on exception log ERROR with correlation_id
-    - _Requirements: 9.7_
-
-  - [ ] 15.2 Connect survey domain events to notification delivery
-    - In `app/domain_events/handlers.py`, register handlers for: `survey_created` → call `NotificationService.deliver("survey_invitation", {survey_link, candidate_email}, org_id)` (Requirement 9.9); `survey_reminder` → call `NotificationService.deliver("survey_reminder", {survey_link, candidate_email}, org_id)` (Requirement 9.10)
-    - Both handlers should use `SurveyFeedbackTemplate` for rendering (Requirement 9.17, 9.18)
-    - _Requirements: 9.9, 9.10, 9.17, 9.18_
-
-  - [ ] 15.3 Implement survey reminder and expiry background scheduler in `app/modules/surveys/scheduler.py`
-    - Create `run_survey_scheduler()` async function
-    - Call `SurveyService.send_reminder()` — selects surveys 7+ days old with no reminder sent
-    - Call `SurveyService.expire_surveys()` — selects surveys 30+ days old with status Sent, sets to Expired
-    - Register scheduler to run periodically (e.g., every 15 minutes or configurable via env var `SURVEY_SCHEDULER_INTERVAL_MINUTES`)
-    - Log all scheduler actions at INFO level
-    - _Requirements: 9.10, 9.11, 9.26_
-
-
-- [ ] 16. Implement survey template management
-  - [ ] 16.1 Create survey template models and migration
-    - Add `SurveyFeedbackTemplate(Base, AuditMixin, VersionMixin)` to `app/modules/surveys/models.py` with fields: `survey_feedback_template_id`, `organization_id`, `template_type` (initial_survey_invitation, survey_reminder), `subject` (max 200), `body_template` (text with `{{variable}}` placeholders), `is_enabled` (bool)
-    - Add `UniqueConstraint("organization_id", "template_type")` to prevent duplicate templates per org
-    - Add migration to create table with check constraint on template_type enum
-    - _Requirements: 9.17, 9.18_
-
-  - [ ] 16.2 Implement survey template service and router
-    - `CandidateFeedbackSurveyTemplateService` in `app/modules/surveys/service.py`: `create_template`, `update_template`, `get_template`, `delete_template` — all org-scoped, require Administrator or SuperAdministrator role
-    - Router endpoints: `GET /api/v1/survey-templates`, `POST /api/v1/survey-templates`, `PATCH /api/v1/survey-templates/{template_id}` — all require Administrator or SuperAdministrator
-    - _Requirements: 9.17, 9.18_
-
-
-- [ ] 17. Wire domain events to survey notification delivery
-  - [~] 17.1 Connect domain event handlers to `NotificationService.deliver`
+  - [x] 17.1 Connect domain event handlers to `NotificationService.deliver`
     - In `app/domain_events/handlers.py` (or equivalent), register handlers for: `journey_stage_changed` → notify candidate, recruiter, and hiring manager (Requirement 8.2); `candidate_questionnaire_response_created` → notify candidate with portal URL (Requirement 8.3); `interview_slot_created` → notify assigned interviewer (Requirement 8.4); `offer_accepted` → notify all interviewers on the journey (Requirement 8.6); `survey_created` → notify candidate with survey link (Requirement 9.9); `survey_reminder` → notify candidate with reminder link (Requirement 9.10)
     - Each handler calls `NotificationService.deliver` with the appropriate `event_type`, `payload`, `org_id`, and `recipient_email`
     - Survey event handlers use `SurveyFeedbackTemplate` if exists, else fall back to `NotificationTemplate` (Requirement 9.17)
     - Ensure `publish_event()` persist-first pattern is maintained: domain event row inserted before `BackgroundTasks.add_task` dispatches the handler
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.6, 9.9, 9.10, 9.17, 9.18_
 
-  - [~] 17.2 Implement 24-hour reminder background scheduler
+  - [x] 17.2 Implement 24-hour reminder background scheduler
     - Create `app/modules/notifications/scheduler.py` with `run_reminder_check()` async function
     - Query `InterviewSlot WHERE status=SCHEDULED AND invitation_status IN ('Pending', 'Accepted') AND scheduled_start BETWEEN now() AND now()+24h AND deleted_at IS NULL`
     - For each slot call `NotificationService.send_24h_reminder(slot_id, org_id)`
@@ -638,13 +493,13 @@ All code follows the conventions established in the Platform Foundation and Iden
 ```json
 {
   "waves": [
-    { "id": 0, "tasks": ["1.1", "2.1", "2.2"] },
+    { "id": 0, "tasks": ["1", "2.1", "2.2"] },
     { "id": 1, "tasks": ["2.3", "3.1", "3.2"] },
-    { "id": 2, "tasks": ["4.1", "5.1", "7.1", "8.1", "9.1", "11.1", "12.1", "13.1", "13.2", "14.1", "16.1"] },
-    { "id": 3, "tasks": ["4.2", "4.3", "4.4", "4.5", "5.2", "5.3", "5.4", "5.5", "7.2", "7.3", "8.2", "8.3", "8.4", "9.2", "9.3", "11.2", "12.2", "12.3", "12.4", "13.3", "13.4", "13.5", "14.2", "14.3", "14.4", "14.5", "14.6", "14.7"] },
+    { "id": 2, "tasks": ["4.1", "5.1", "7.1", "8.1", "9.1", "11.1", "12.1", "13.1", "14.1", "16.1"] },
+    { "id": 3, "tasks": ["4.2", "4.3", "4.4", "4.5", "5.2", "5.3", "5.4", "5.5", "7.2", "7.3", "8.2", "8.3", "8.4", "9.2", "9.3", "11.2", "12.2", "12.3", "12.4", "13.2", "13.3", "13.4", "13.5", "14.2", "14.3", "14.4", "14.5", "14.6", "14.7"] },
     { "id": 4, "tasks": ["4.6", "5.6", "7.4", "8.5", "9.4", "11.3", "12.5", "13.6", "14.8", "16.2"] },
     { "id": 5, "tasks": ["15.1", "15.2", "15.3", "17.1", "17.2"] },
-    { "id": 6, "tasks": ["18.1", "18.2"] }
+    { "id": 6, "tasks": ["18.1", "18.2", "19"] }
   ]
 }
 ```

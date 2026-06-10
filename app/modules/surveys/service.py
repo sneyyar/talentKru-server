@@ -88,10 +88,11 @@ class CandidateFeedbackSurveyService:
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
 
-        # Create token record (store only hash, never plaintext token)
+        # Create token record (store both plaintext token and hash)
         token_record = CandidateFeedbackSurveyToken(
             candidate_feedback_survey_token_id=uuid4(),
             candidate_feedback_survey_id=survey.candidate_feedback_survey_id,
+            token=raw_token,
             token_hash=token_hash,
             created_at=now,
             expires_at=expires_at,

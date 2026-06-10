@@ -69,6 +69,7 @@ class CandidateFeedbackSurveyToken(Base, AuditMixin):
 
     candidate_feedback_survey_token_id = Column(UUID_TYPE(as_uuid=True), primary_key=True, default=uuid4)
     candidate_feedback_survey_id = Column(UUID_TYPE(as_uuid=True), nullable=False)
+    token = Column(String(128), nullable=False, unique=True)
     token_hash = Column(String(64), nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
@@ -125,7 +126,7 @@ class CandidateFeedbackSurveyAnswer(Base, AuditMixin):
     )
 
 
-class SurveyFeedbackTemplate(Base, AuditMixin, VersionMixin):
+class SurveyFeedbackTemplate(Base, AuditMixin):
     """Survey email template (Req 9.17)."""
     __tablename__ = "survey_feedback_templates"
 

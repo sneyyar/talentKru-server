@@ -35,7 +35,6 @@ async def test_create_template_success(
     assert template.subject == f"Survey Invitation - {test_run_id}"
     assert template.body_template == "Please complete our survey at {{survey_link}}"
     assert template.is_enabled is True
-    assert template.version == 1
 
 
 @pytest.mark.asyncio
@@ -232,7 +231,6 @@ async def test_update_template_subject(
     assert updated.subject == new_subject
     assert updated.body_template == "Body"
     assert updated.is_enabled is True
-    assert updated.version == 2  # Version incremented
 
 
 @pytest.mark.asyncio

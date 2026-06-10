@@ -206,6 +206,50 @@ def test_suite_init():
         print(f"Warning: Could not run post-cleanup: {e}")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def test_migrations_init():
+    """
+    Apply database migrations to test database at suite start.
+    
+    Ensures the test database schema is up-to-date before any tests run.
+    """
+    import subprocess
+    
+    try:
+        # Get test database config from environment
+        test_host = os.getenv("TEST_DATABASE_HOST", "localhost")
+        test_port = os.getenv("TEST_DATABASE_PORT", "5432")
+        test_name = os.getenv("TEST_DATABASE_NAME", "kru_test_db")
+        test_user = os.getenv("TEST_DATABASE_USER", "kru_test")
+        test_password = os.getenv("TEST_DATABASE_PASSWORD", "kruTest2026")
+        
+        # Set environment for alembic
+        env = os.environ.copy()
+        env["DATABASE_HOST"] = test_host
+        env["DATABASE_PORT"] = str(test_port)
+        env["DATABASE_NAME"] = test_name
+        env["DATABASE_USER"] = test_user
+        env["DATABASE_PASSWORD"] = test_password
+        
+        print("📦 Applying migrations to test database...")
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        
+        if result.returncode != 0:
+            print(f"⚠️  Warning: Migration application had issues: {result.stderr}")
+        else:
+            print("✅ Test database migrations applied successfully")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not apply migrations: {e}")
+    
+    yield
+
+
 @pytest.fixture
 async def db_session(async_session_factory):
     """

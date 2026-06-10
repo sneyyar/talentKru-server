@@ -36,10 +36,14 @@ async def test_send_reminders_selects_surveys_7_days_old_no_reminder(
     await db_session.flush()
 
     # Create token
+    import secrets
+    import hashlib
+    raw_token = secrets.token_urlsafe(32)
     token = CandidateFeedbackSurveyToken(
         candidate_feedback_survey_token_id=uuid4(),
         candidate_feedback_survey_id=survey.candidate_feedback_survey_id,
-        token_hash="test_hash",
+        token=raw_token,
+        token_hash=hashlib.sha256(raw_token.encode()).hexdigest(),
         created_at=eight_days_ago,
         expires_at=now + timedelta(days=22),
         is_active=True,
@@ -82,10 +86,14 @@ async def test_send_reminders_skips_surveys_less_than_7_days_old(
     await db_session.flush()
 
     # Create token
+    import secrets
+    import hashlib
+    raw_token = secrets.token_urlsafe(32)
     token = CandidateFeedbackSurveyToken(
         candidate_feedback_survey_token_id=uuid4(),
         candidate_feedback_survey_id=survey.candidate_feedback_survey_id,
-        token_hash="test_hash",
+        token=raw_token,
+        token_hash=hashlib.sha256(raw_token.encode()).hexdigest(),
         created_at=five_days_ago,
         expires_at=now + timedelta(days=25),
         is_active=True,
@@ -162,10 +170,14 @@ async def test_expire_old_surveys_marks_30_day_old_as_expired(
     await db_session.flush()
 
     # Create token
+    import secrets
+    import hashlib
+    raw_token = secrets.token_urlsafe(32)
     token = CandidateFeedbackSurveyToken(
         candidate_feedback_survey_token_id=uuid4(),
         candidate_feedback_survey_id=survey.candidate_feedback_survey_id,
-        token_hash="test_hash",
+        token=raw_token,
+        token_hash=hashlib.sha256(raw_token.encode()).hexdigest(),
         created_at=thirty_one_days_ago,
         expires_at=now - timedelta(days=1),
         is_active=True,
@@ -210,10 +222,14 @@ async def test_expire_old_surveys_skips_unexpired(
     await db_session.flush()
 
     # Create token
+    import secrets
+    import hashlib
+    raw_token = secrets.token_urlsafe(32)
     token = CandidateFeedbackSurveyToken(
         candidate_feedback_survey_token_id=uuid4(),
         candidate_feedback_survey_id=survey.candidate_feedback_survey_id,
-        token_hash="test_hash",
+        token=raw_token,
+        token_hash=hashlib.sha256(raw_token.encode()).hexdigest(),
         created_at=twenty_days_ago,
         expires_at=future,
         is_active=True,

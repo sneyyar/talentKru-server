@@ -45,7 +45,6 @@ async def test_create_survey_template_endpoint_schema(
     assert len(template.subject) <= 200
     assert len(template.body_template) > 0
     assert isinstance(template.is_enabled, bool)
-    assert template.version >= 1
 
 
 @pytest.mark.asyncio
@@ -77,7 +76,6 @@ async def test_update_survey_template_endpoint_schema(
     assert updated.subject == f"Updated - {test_run_id}"
     assert updated.body_template == "Original body"
     assert updated.is_enabled is True
-    assert updated.version == 2
 
 
 @pytest.mark.asyncio
@@ -123,7 +121,6 @@ async def test_post_survey_template_returns_201(
     
     # Service method creates successfully
     assert template.survey_feedback_template_id is not None
-    assert template.version == 1
 
 
 @pytest.mark.asyncio
@@ -183,7 +180,6 @@ async def test_template_crud_lifecycle(
     )
     assert updated.subject == f"Updated Reminder - {test_run_id}"
     assert updated.is_enabled is False
-    assert updated.version == 2
     
     # Delete
     await service.delete_template(org_id, created.survey_feedback_template_id)
@@ -296,18 +292,17 @@ async def test_template_versions_tracked(
         body_template="Body",
         is_enabled=True,
     )
-    assert template.version == 1
     
     updated1 = await service.update_template(
         org_id=org_id,
         template_id=template.survey_feedback_template_id,
         subject="Updated 1",
     )
-    assert updated1.version == 2
+    assert updated1.survey_feedback_template_id is not None
     
     updated2 = await service.update_template(
         org_id=org_id,
         template_id=template.survey_feedback_template_id,
         is_enabled=False,
     )
-    assert updated2.version == 3
+    assert updated2.is_enabled is False

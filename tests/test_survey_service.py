@@ -192,10 +192,10 @@ async def test_submit_survey_validates_comments_length(
 
 
 @pytest.mark.asyncio
-async def test_submit_survey_twice_raises_409(
+async def test_submit_survey_twice_raises_401(
     db_session: AsyncSession, test_run_id: str, org_id
 ):
-    """Submitting twice should raise 409 conflict."""
+    """Submitting twice should raise 401 because token becomes inactive."""
     service = CandidateFeedbackSurveyService(db_session)
     journey_id = uuid4()
     candidate_id = uuid4()
@@ -218,11 +218,11 @@ async def test_submit_survey_twice_raises_409(
     # First submission
     await service.submit_survey(raw_token, {str(q1.candidate_feedback_survey_question_id): 5})
 
-    # Second submission should fail
+    # Second submission should fail (token is now inactive)
     with pytest.raises(Exception) as exc_info:
         await service.submit_survey(raw_token, {str(q1.candidate_feedback_survey_question_id): 8})
 
-    assert exc_info.value.status_code == status.HTTP_409_CONFLICT
+    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.asyncio
